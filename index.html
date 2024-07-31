@@ -1,0 +1,199 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <title>Control Panel</title>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Roboto:wght@400;700&display=swap');
+        body {
+            font-family: 'Roboto', Arial, sans-serif;
+            margin: 0;
+            padding: 0;
+            background-color: #222;
+            color: #fff;
+            height: 100vh;
+            width: 100vw;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+        }
+        .container {
+            width: 90%;
+            max-width: 900px;
+            height: 100%;
+            margin: 0 auto;
+            text-align: center;
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
+        }
+        h1 {
+            font-size: 4em;
+            text-align: center;
+            font-family: 'Roboto', sans-serif;
+            margin: 100px 0 30px;
+        }
+        p {
+            font-size: 2em;
+        }
+        .button-container {
+            width: 100%;
+            display: flex;
+            flex-wrap: wrap;
+            justify-content: center;
+            margin: 50px 0;
+        }
+        .button-container button {
+            font-size: 2em;
+            margin: 10px;
+            padding: 15px 30px;
+            cursor: pointer;
+            border-radius: 50%;
+            color: #fff;
+            border: none;
+            transition: background-color 0.2s ease-in-out;
+            width: 25vw;
+            height: 25vw;
+            max-width: 300px;
+            max-height: 300px;
+        }
+        .button-container button.red {
+            background-color: #4c4f51;
+        }
+        .button-container button.green {
+            background-color: #2485c9;
+        }
+        .button-container button#audioInButton {
+            background-color: #4c4f51;
+        }
+        .range-container {
+            flex: 1;
+            width: 100%;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            padding: 0 10px;
+            margin-top: 10px;
+        }
+        form {
+            width: 100%;
+            max-width: 100%;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            padding: 10px;
+            border-radius: 5px;
+        }
+        .form-text {
+            font-size: 2.5em;
+            margin: 20px 0;
+        }
+        input[type='range'] {
+            -webkit-appearance: none;
+            width: 100%;
+            height: 20px;
+            background: #4c4f51;
+            border-radius: 20px;
+            cursor: pointer;
+            margin-bottom: 50px;
+        }
+        input[type='range']::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            appearance: none;
+            width: 60px;
+            height: 60px;
+            border-radius: 50%;
+            background: #2485c9;
+            cursor: pointer;
+        }
+        input[type='range']::-moz-range-thumb {
+            width: 40px;
+            height: 40px;
+            border-radius: 50%;
+            background: #2485c9;
+            cursor: pointer;
+        }
+        @media (max-width: 768px) {
+            h1 {
+                font-size: 2em;
+            }
+            .form-text {
+                font-size: 2em;
+            }
+            input[type='range'] {
+                width: calc(95% - 40px);
+            }
+            .button-container button {
+                font-size: 1.5em;
+                margin: 15px 5px;
+                padding: 15px 30px;
+            }
+        }
+    </style>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.6.0/css/all.min.css">
+</head>
+<body>
+    <div class="container">
+        <h1>Home Theater Control</h1>
+        <div class="button-container">
+            <button id="systemButton" class="<%= systemClass %>" onclick="toggleButton('system')">
+                <i class="fas fa-power-off fa-2x"></i>
+            </button>
+            <button id="bluetoothButton" class="<%= bluetoothClass %>" onclick="toggleButton('bluetooth')">
+                <i class="fa-brands fa-bluetooth-b fa-2x"></i>
+            </button>
+            <button id="muteButton" class="<%= muteClass %>" onclick="toggleButton('mute')">
+                <i class="fas fa-volume-mute fa-2x"></i>
+            </button>
+            <button id="dddButton" class="<%= dddClass %>" onclick="toggleButton('ddd')">
+                <i class="fa-solid fa-cube fa-2x"></i>
+            </button>
+            <button id="audioInButton" class="<%= audioInClass %>" onclick="toggleButton('audioIn')">
+                <i class="fas fa-music fa-2x"></i>
+            </button>
+        </div>
+        <div class="range-container">
+            <form action="/setVolume" method="POST">
+                <span class="form-text">Volume Total</span>
+                <input type="range" id="total" name="total" min="0" max="79" value="<%= currentTotalVol %>" oninput="updateVolume(this)"><br>
+                <span class="form-text">Center</span>
+                <input type="range" id="center" name="center" min="0" max="15" value="<%= currentCenterVol %>" oninput="updateVolume(this)"><br>
+                <span class="form-text">Subwoofer</span>
+                <input type="range" id="sub" name="sub" min="0" max="15" value="<%= currentSubVol %>" oninput="updateVolume(this)"><br>
+                <span class="form-text">Front L/R</span>
+                <input type="range" id="front" name="front" min="0" max="15" value="<%= currentFrontVol %>" oninput="updateVolume(this)"><br>
+                <span class="form-text">Surround L/R</span>
+                <input type="range" id="rear" name="rear" min="0" max="15" value="<%= currentRearVol %>" oninput="updateVolume(this)"><br>
+            </form>
+            <p>
+                <a href="https://github.com/onlycampe" target="_blank" style="color: #4c4f51; text-decoration: none;">
+                    <i class="fa-brands fa-github-alt fa-1x"></i> OnlyCampe
+                </a>
+            </p>
+        </div>
+    </div>
+    <script>
+        function updateVolume(input) {
+            var xhr = new XMLHttpRequest();
+            xhr.open('POST', '/setVolume', true);
+            xhr.setRequestHeader('Content-Type', 'application/x-www-form-urlencoded');
+            xhr.send(input.name + '=' + input.value);
+        }
+
+        function toggleButton(buttonId) {
+            var xhr = new XMLHttpRequest();
+            xhr.onreadystatechange = function() {
+                if (this.readyState == 4 && this.status == 200) {
+                    var button = document.getElementById(buttonId + 'Button');
+                    button.classList.toggle('red');
+                    button.classList.toggle('green');
+                }
+            };
+            xhr.open('POST', '/setFunc', true);
+            xhr.setRequestHeader('Content-Type', 'application/x-www-form-urlencoded');
+            xhr.send('func=' + buttonId + '&state=' + (document.getElementById(buttonId + 'Button').classList.contains('green') ? '0' : '1'));
+        }
+    </script>
+</body>
+</html>
