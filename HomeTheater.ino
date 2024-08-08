@@ -414,6 +414,6 @@ void applySettings() {
   pt.setMiddle(currentMiddleValue);
   pt.setTreble(currentTrebleValue);
   if (loggingEnabled) {
-    Serial.println("Configurações aplicadas ao PT2322.");
+    Serial.println("ApplySettings PT2322.");
   }
 }
