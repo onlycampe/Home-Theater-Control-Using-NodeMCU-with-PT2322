@@ -56,7 +56,7 @@ int currentTrebleValue = 0;   // Initial value for Treble adjustment
 int currentMute = 0;          // Initial mute state
 int currentDdd = 1;           // Initial DDD setting
 int currentTemb = 0;          // Initial Temb setting
-
+//
 void handleRoot() {
   // Obtenha o estado atual dos botões
   String systemClass = isSystemOn ? "green" : "red";
