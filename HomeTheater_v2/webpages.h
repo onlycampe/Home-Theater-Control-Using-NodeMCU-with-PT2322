@@ -60,12 +60,86 @@ const char HTML_FOOTER[] PROGMEM = R"=====(
 <a href='/status-page' class='status-link'>
 <i class='fa-solid fa-chart-line'></i> <span>Status</span>
 </a>
+<span class='separator'>|</span>
+<a href='/test-tone.html' class='status-link'>
+<i class='fa-solid fa-waveform-lines'></i> <span>Teste</span>
+</a>
 </div>
 </div>
 </div>
 <script>
 function updateVolume(el){fetch('/setVolume',{method:'POST',headers:{'Content-Type':'application/x-www-form-urlencoded'},body:`${el.name}=${el.value}`});}
 function toggleButton(id){let btn=document.getElementById(id+'Button');if(id==='audioIn'||id==='audio51'){btn.classList.add('pulse');setTimeout(()=>btn.classList.remove('pulse'),300);fetch('/setFunc',{method:'POST',headers:{'Content-Type':'application/x-www-form-urlencoded'},body:`func=${id}&state=1`});}else{fetch('/setFunc',{method:'POST',headers:{'Content-Type':'application/x-www-form-urlencoded'},body:`func=${id}&state=${btn.classList.contains('green')?'0':'1'}`}).then(()=>{btn.classList.toggle('red');btn.classList.toggle('green');});}}
+</script>
+</body>
+</html>
+)=====";
+
+const char TEST_TONE_PAGE[] PROGMEM = R"=====(
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset='UTF-8'>
+<title>Teste de Canais</title>
+<meta name='theme-color' content='#0f0c29'>
+<meta name='viewport' content='width=device-width,initial-scale=1'>
+<link rel='stylesheet' href='https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.7.2/css/all.min.css'>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap');
+body{font-family:'Inter',sans-serif;margin:0;padding:20px;background:linear-gradient(135deg,#0f0c29 0%,#302b63 50%,#24243e 100%);background-attachment:fixed;color:#fff;min-height:100vh;}
+.container{max-width:900px;margin:0 auto;}
+h1{color:#fff;text-align:center;font-size:2.2em;font-weight:700;margin-bottom:10px;background:linear-gradient(135deg,#667eea 0%,#764ba2 100%);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;}
+.info{background:rgba(102,126,234,0.15);border-left:4px solid #667eea;padding:15px;border-radius:8px;margin:20px 0;color:#cbd5e0;font-size:0.95em;}
+.section{background:rgba(255,255,255,0.08);backdrop-filter:blur(20px);border-radius:20px;padding:30px;margin:25px 0;border:1px solid rgba(255,255,255,0.15);box-shadow:0 8px 32px rgba(0,0,0,0.3);}
+.section h2{font-size:1.4em;margin:0 0 20px 0;color:#cbd5e0;font-weight:600;}
+.channel-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:15px;margin:20px 0;}
+.channel-btn{background:linear-gradient(135deg,#667eea 0%,#764ba2 100%);border:none;color:#fff;padding:20px;border-radius:12px;cursor:pointer;font-size:1em;font-weight:600;transition:all 0.3s ease;box-shadow:0 4px 15px rgba(102,126,234,0.4);}
+.channel-btn:hover{transform:translateY(-2px);box-shadow:0 6px 20px rgba(102,126,234,0.6);}
+.channel-btn.active{background:linear-gradient(135deg,#f093fb 0%,#f5576c 100%);animation:pulse 1s infinite;}
+@keyframes pulse{0%,100%{transform:scale(1);}50%{transform:scale(1.05);}}
+.control-group{display:flex;gap:15px;justify-content:center;margin:20px 0;flex-wrap:wrap;}
+.control-btn{background:linear-gradient(135deg,#667eea 0%,#764ba2 100%);border:none;color:#fff;padding:15px 30px;border-radius:12px;cursor:pointer;font-size:1.1em;font-weight:600;transition:all 0.3s ease;}
+.control-btn:hover{transform:translateY(-2px);}
+.control-btn.stop{background:linear-gradient(135deg,#f093fb 0%,#f5576c 100%);}
+.control-btn.all{background:linear-gradient(135deg,#4caf50 0%,#45a049 100%);}
+.status-indicator{display:inline-block;width:12px;height:12px;border-radius:50%;margin-right:8px;background:#48bb78;animation:blink 1s infinite;}
+@keyframes blink{0%,100%{opacity:1;}50%{opacity:0.3;}}
+.btn-back{display:inline-block;background:linear-gradient(135deg,#667eea 0%,#764ba2 100%);color:#fff;padding:16px 32px;border-radius:12px;text-decoration:none;margin:30px 0;font-size:1.1em;font-weight:600;transition:all 0.3s ease;}
+.btn-back:hover{transform:translateY(-2px);}
+</style>
+</head>
+<body>
+<div class='container'>
+<h1><i class='fa-solid fa-waveform-lines'></i> Teste de Canais</h1>
+<div class='info'>
+<strong>💡 Atenção:</strong> Toque música/áudio antes de testar. O sistema isola cada canal para você ouvir individualmente.
+</div>
+<div class='section'>
+<h2>Canais</h2>
+<div class='channel-grid'>
+<button class='channel-btn' onclick='testChannel("front_left")' id='btn_front_left'>Front L</button>
+<button class='channel-btn' onclick='testChannel("front_right")' id='btn_front_right'>Front R</button>
+<button class='channel-btn' onclick='testChannel("center")' id='btn_center'>Center</button>
+<button class='channel-btn' onclick='testChannel("subwoofer")' id='btn_subwoofer'>Subwoofer</button>
+<button class='channel-btn' onclick='testChannel("rear_left")' id='btn_rear_left'>Rear L</button>
+<button class='channel-btn' onclick='testChannel("rear_right")' id='btn_rear_right'>Rear R</button>
+</div>
+</div>
+<div class='section'>
+<h2>Controles</h2>
+<div class='control-group'>
+<button class='control-btn all' onclick='testChannel("all")'><i class='fa-solid fa-volume-high'></i> Todos</button>
+<button class='control-btn stop' onclick='stopTest()'><i class='fa-solid fa-stop'></i> Parar</button>
+</div>
+<div id='status' style='text-align:center;margin-top:15px;color:#cbd5e0;'></div>
+</div>
+<a href='/' class='btn-back'><i class='fa-solid fa-arrow-left'></i> Voltar</a>
+</div>
+<script>
+let active=null;let seq=null;
+function testChannel(c){stopTest();active=c;if(c!=='all')document.getElementById('btn_'+c).classList.add('active');fetch('/testTone',{method:'POST',headers:{'Content-Type':'application/x-www-form-urlencoded'},body:`channel=${c}`}).then(()=>{document.getElementById('status').innerHTML=c==='all'?'<i class="fa-solid fa-volume-high"></i> Todos ativos':`<span class='status-indicator'></span>Testando: ${c.replace('_',' ')}`;});}
+function stopTest(){document.querySelectorAll('.channel-btn').forEach(b=>b.classList.remove('active'));active=null;if(seq)clearTimeout(seq);fetch('/stopTest',{method:'POST'}).then(()=>{document.getElementById('status').innerHTML='';});}
+window.addEventListener('beforeunload',()=>stopTest());
 </script>
 </body>
 </html>

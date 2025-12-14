@@ -51,10 +51,11 @@ bool isSystemOn = false;
 bool isBluetoothOn = false;
 bool isMuteOn = false;
 bool isDddOn = true;
-bool isTembOn = false;
 bool loggingEnabled = ENABLE_SERIAL_LOGGING;
-bool isRelayOn = false;
-bool isAudio51Enabled = true;
+
+// Test Channel State
+bool testToneActive = false;
+String activeTestChannel = "";
 
 // ✅ NOVO: Variáveis para controle de power não-bloqueante
 enum PowerSequenceState {
@@ -70,42 +71,55 @@ bool targetPowerState = false;
 // VARIÁVEIS DE VOLUME E ÁUDIO (VALORES PADRÃO)
 // =============================================================================
 // 💡 Estes valores são restaurados a cada inicialização
-// Mudanças durante o uso são temporárias
-int currentTotalVol = 53;     // Volume padrão: 53
-int currentCenterVol = 10;    // Center padrão: 10
-int currentSubVol = 12;       // Subwoofer padrão: 12
-int currentFrontVol = 10;     // Front padrão: 10
-int currentRearVol = 10;      // Rear padrão: 10
-int currentBassValue = 0;     // Bass padrão: 0
-int currentMiddleValue = 0;   // Middle padrão: 0
-int currentTrebleValue = 0;   // Treble padrão: 0
-int currentMute = 0;          // Mute padrão: OFF
-int currentDdd = 1;           // DDD padrão: ON
-int currentTemb = 0;          // Temb padrão: 0
+int currentTotalVol = 53;
+int currentCenterVol = 10;
+int currentSubVol = 12;
+int currentFrontVol = 10;
+int currentRearVol = 10;
 
 unsigned long lastVolumeUpdateTime = 0;
 const unsigned long volumeUpdateInterval = 1000;
 int lastVolumeSent = -1;
 
 // =============================================================================
+// 🌟 BUFFER POOL PARA OTIMIZAÇÃO DE MEMÓRIA
+// =============================================================================
+static char smallBuffer[128];
+static char mediumBuffer[256];
+static char largeBuffer[512];
+
+// =============================================================================
 // DECLARAÇÕES DE FUNÇÕES (protótipos)
 // =============================================================================
 bool onPowerState(const String &deviceId, bool &state);
-bool onSetVolume(const String &deviceId, int volume);  // ✅ Corrigido: int volume (não referência)
+bool onSetVolume(const String &deviceId, int volume);
 bool onMute(const String &deviceId, bool &state);
 void handlePowerSequence();
 void setupOTA();
 void logMessage(const char* level, const String& message);
+inline String maskIP(const IPAddress& ip);
 
 // =============================================================================
-// SISTEMA DE LOGGING
+// FUNÇÕES AUXILIARES OTIMIZADAS
+// =============================================================================
+// Máscara de IP para logs (evita exposição completa)
+inline String maskIP(const IPAddress& ip) {
+    snprintf_P(smallBuffer, sizeof(smallBuffer), 
+               PSTR("%d.%d.xxx.xxx"), ip[0], ip[1]);
+    return String(smallBuffer);
+}
+
+// =============================================================================
+// SISTEMA DE LOGGING OTIMIZADO
 // =============================================================================
 void logMessage(const char* level, const String& message) {
-    if (loggingEnabled) {
-        unsigned long uptime = millis() / 1000;
-        String logLine = "[" + String(uptime) + "s] [" + String(level) + "] " + message;
-        Serial.println(logLine);
-    }
+    if (!loggingEnabled) return;
+    
+    unsigned long uptime = millis() / 1000;
+    snprintf_P(smallBuffer, sizeof(smallBuffer), 
+               PSTR("[%lus] [%s] "), uptime, level);
+    Serial.print(smallBuffer);
+    Serial.println(message);
 }
 
 // =============================================================================
@@ -211,8 +225,10 @@ bool onSetVolume(const String &deviceId, int volume) {
 
 bool onMute(const String &deviceId, bool &mute) {
     isMuteOn = mute;
-    currentMute = mute ? 1 : 0;
-    pt.setFunc(currentMute, currentDdd, currentTemb);
+    int currentMute = mute ? 1 : 0;
+    int currentDdd = isDddOn ? 1 : 0;
+    pt.setFunc(currentMute, currentDdd, 0);
+    
     if (loggingEnabled) {
         String source = deviceId.isEmpty() ? "WEB" : "SinricPro";
         logMessage("INFO", "[" + source + "] Mute " + String(mute ? "ON" : "OFF"));
@@ -221,8 +237,11 @@ bool onMute(const String &deviceId, bool &mute) {
 }
 
 bool onDdd(const String &deviceId, bool &state) {
-    currentDdd = state ? 1 : 0;
-    pt.setFunc(currentMute, currentDdd, currentTemb);
+    isDddOn = state;
+    int currentMute = isMuteOn ? 1 : 0;
+    int currentDdd = state ? 1 : 0;
+    pt.setFunc(currentMute, currentDdd, 0);
+    
     if (loggingEnabled) {
         String source = deviceId.isEmpty() ? "WEB" : "SinricPro";
         logMessage("INFO", "[" + source + "] DDD " + String(state ? "ON" : "OFF"));
@@ -231,156 +250,231 @@ bool onDdd(const String &deviceId, bool &state) {
 }
 
 // =============================================================================
-// 🌟 HANDLER DA PÁGINA DE STATUS HTML (visual bonita)
+// 🌟 HANDLER DA PÁGINA DE STATUS HTML (OTIMIZADO)
 // =============================================================================
 void handleStatusPage() {
-    logMessage("WEB", "Status page acessada de " + server.client().remoteIP().toString());
+    logMessage("WEB", "Status page: " + maskIP(server.client().remoteIP()));
     
-    // Envia em chunks
     server.setContentLength(CONTENT_LENGTH_UNKNOWN);
     server.send(200, "text/html", "");
     server.sendContent_P(STATUS_PAGE_HTML);
     
-    // Card 1: Sistema
-    String html = "<div class='card'><h2><i class='fa-solid fa-microchip'></i> Sistema</h2><div class='info-grid'>";
-    html += "<span class='label'>Versão:</span><span class='value'>2.5</span>";
-    html += "<span class='label'>Uptime:</span><span class='value'>" + String(millis() / 1000) + "s (" + String(millis() / 60000) + " min)</span>";
-    html += "<span class='label'>Chip ID:</span><span class='value'>" + String(ESP.getChipId(), HEX) + "</span>";
-    html += "<span class='label'>SDK Version:</span><span class='value'>" + String(ESP.getSdkVersion()) + "</span>";
-    html += "<span class='label'>Core Version:</span><span class='value'>" + ESP.getCoreVersion() + "</span>";
-    html += "<span class='label'>Boot Version:</span><span class='value'>" + String(ESP.getBootVersion()) + "</span>";
-    html += "<span class='label'>Boot Mode:</span><span class='value'>" + String(ESP.getBootMode()) + "</span>";
-    html += "<span class='label'>Reset Reason:</span><span class='value'>" + ESP.getResetReason() + "</span>";
-    html += "</div></div>";
-    server.sendContent(html);
+    // Card 1: Sistema (usando buffer reutilizável)
+    server.sendContent_P(PSTR("<div class='card'><h2><i class='fa-solid fa-microchip'></i> Sistema</h2><div class='info-grid'>"));
+    server.sendContent_P(PSTR("<span class='label'>Versão:</span><span class='value'>2.5</span>"));
+    
+    snprintf_P(largeBuffer, sizeof(largeBuffer),
+               PSTR("<span class='label'>Uptime:</span><span class='value'>%lus (%lu min)</span>"),
+               millis() / 1000, millis() / 60000);
+    server.sendContent(largeBuffer);
+    
+    snprintf_P(mediumBuffer, sizeof(mediumBuffer),
+               PSTR("<span class='label'>Chip ID:</span><span class='value'>%lx</span>"),
+               ESP.getChipId());
+    server.sendContent(mediumBuffer);
+    
+    snprintf_P(mediumBuffer, sizeof(mediumBuffer),
+               PSTR("<span class='label'>SDK Version:</span><span class='value'>%s</span>"),
+               ESP.getSdkVersion());
+    server.sendContent(mediumBuffer);
+    
+    server.sendContent_P(PSTR("<span class='label'>Core Version:</span><span class='value'>"));
+    server.sendContent(ESP.getCoreVersion());
+    server.sendContent_P(PSTR("</span>"));
+    
+    snprintf_P(mediumBuffer, sizeof(mediumBuffer),
+               PSTR("<span class='label'>Boot Version:</span><span class='value'>%d</span>"
+                    "<span class='label'>Boot Mode:</span><span class='value'>%d</span>"),
+               ESP.getBootVersion(), ESP.getBootMode());
+    server.sendContent(mediumBuffer);
+    
+    server.sendContent_P(PSTR("<span class='label'>Reset Reason:</span><span class='value'>"));
+    server.sendContent(ESP.getResetReason());
+    server.sendContent_P(PSTR("</span></div></div>"));
+    
+    yield(); // Watchdog
+    yield(); // Watchdog
     
     // Card 2: CPU & Flash
-    String flashMode;
+    const char* flashMode = "Unknown";
     switch(ESP.getFlashChipMode()) {
         case 0: flashMode = "QIO"; break;
         case 1: flashMode = "QOUT"; break;
         case 2: flashMode = "DIO"; break;
         case 3: flashMode = "DOUT"; break;
-        default: flashMode = "Unknown"; break;
     }
     
-    html = "<div class='card'><h2><i class='fa-solid fa-bolt'></i> CPU & Flash</h2><div class='info-grid'>";
-    html += "<span class='label'>CPU Freq:</span><span class='value status-ok'>" + String(ESP.getCpuFreqMHz()) + " MHz</span>";
-    html += "<span class='label'>Flash Size:</span><span class='value'>" + String(ESP.getFlashChipSize() / 1024) + " KB</span>";
-    html += "<span class='label'>Flash Speed:</span><span class='value'>" + String(ESP.getFlashChipSpeed() / 1000000) + " MHz</span>";
-    html += "<span class='label'>Flash Mode:</span><span class='value'>" + flashMode + "</span>";
-    html += "<span class='label'>Sketch Size:</span><span class='value'>" + String(ESP.getSketchSize() / 1024) + " KB</span>";
-    html += "<span class='label'>Free Space:</span><span class='value'>" + String(ESP.getFreeSketchSpace() / 1024) + " KB</span>";
-    html += "<span class='label'>Sketch MD5:</span><span class='value' style='font-size:0.8em;'>" + ESP.getSketchMD5() + "</span>";
-    html += "</div></div>";
-    server.sendContent(html);
+    server.sendContent_P(PSTR("<div class='card'><h2><i class='fa-solid fa-bolt'></i> CPU & Flash</h2><div class='info-grid'>"));
+    
+    snprintf_P(largeBuffer, sizeof(largeBuffer),
+               PSTR("<span class='label'>CPU Freq:</span><span class='value status-ok'>%d MHz</span>"
+                    "<span class='label'>Flash Size:</span><span class='value'>%lu KB</span>"
+                    "<span class='label'>Flash Speed:</span><span class='value'>%lu MHz</span>"
+                    "<span class='label'>Flash Mode:</span><span class='value'>%s</span>"),
+               ESP.getCpuFreqMHz(),
+               ESP.getFlashChipSize() / 1024,
+               ESP.getFlashChipSpeed() / 1000000,
+               flashMode);
+    server.sendContent(largeBuffer);
+    
+    snprintf_P(largeBuffer, sizeof(largeBuffer),
+               PSTR("<span class='label'>Sketch Size:</span><span class='value'>%lu KB</span>"
+                    "<span class='label'>Free Space:</span><span class='value'>%lu KB</span>"),
+               ESP.getSketchSize() / 1024,
+               ESP.getFreeSketchSpace() / 1024);
+    server.sendContent(largeBuffer);
+    
+    server.sendContent_P(PSTR("<span class='label'>Sketch MD5:</span><span class='value' style='font-size:0.8em;'>"));
+    server.sendContent(ESP.getSketchMD5());
+    server.sendContent_P(PSTR("</span></div></div>"));
+    
+    yield();
+    yield();
     
     // Card 3: Memória
     int freeHeap = ESP.getFreeHeap();
     int heapPercent = (freeHeap * 100) / 80192;
-    String heapClass = heapPercent > 30 ? "status-ok" : "status-warn";
+    const char* heapClass = heapPercent > 30 ? "status-ok" : "status-warn";
     
-    html = "<div class='card'><h2><i class='fa-solid fa-memory'></i> Memória RAM</h2><div class='info-grid'>";
-    html += "<span class='label'>RAM Livre:</span><span class='value " + heapClass + "'>" + String(freeHeap) + " bytes (" + String(heapPercent) + "%)</span>";
-    html += "<span class='label'>Max Free Block:</span><span class='value'>" + String(ESP.getMaxFreeBlockSize()) + " bytes</span>";
-    html += "<span class='label'>Fragmentação:</span><span class='value'>" + String(ESP.getHeapFragmentation()) + "%</span>";
-    html += "</div></div>";
-    server.sendContent(html);
+    server.sendContent_P(PSTR("<div class='card'><h2><i class='fa-solid fa-memory'></i> Memória RAM</h2><div class='info-grid'>"));
+    
+    snprintf_P(largeBuffer, sizeof(largeBuffer),
+               PSTR("<span class='label'>RAM Livre:</span><span class='value %s'>%d bytes (%d%%)</span>"
+                    "<span class='label'>Max Free Block:</span><span class='value'>%d bytes</span>"
+                    "<span class='label'>Fragmentação:</span><span class='value'>%d%%</span>"),
+               heapClass, freeHeap, heapPercent,
+               ESP.getMaxFreeBlockSize(),
+               ESP.getHeapFragmentation());
+    server.sendContent(largeBuffer);
+    server.sendContent_P(PSTR("</div></div>"));
+    
+    yield();
     
     // Card 4: WiFi
     int rssi = WiFi.RSSI();
-    String signalClass = rssi > -60 ? "status-ok" : (rssi > -70 ? "status-warn" : "status-warn");
+    const char* signalClass = rssi > -60 ? "status-ok" : "status-warn";
     
-    html = "<div class='card'><h2><i class='fa-solid fa-wifi'></i> WiFi</h2><div class='info-grid'>";
-    html += "<span class='label'>SSID:</span><span class='value'>" + WiFi.SSID() + "</span>";
-    html += "<span class='label'>Canal:</span><span class='value'>" + String(WiFi.channel()) + "</span>";
-    html += "<span class='label'>IP:</span><span class='value'>" + WiFi.localIP().toString() + "</span>";
-    html += "<span class='label'>MAC:</span><span class='value'>" + WiFi.macAddress() + "</span>";
-    html += "<span class='label'>Signal:</span><span class='value " + signalClass + "'>" + String(rssi) + " dBm</span>";
-    html += "</div></div>";
-    server.sendContent(html);
+    server.sendContent_P(PSTR("<div class='card'><h2><i class='fa-solid fa-wifi'></i> WiFi</h2><div class='info-grid'>"));
     
-    // Card 4: Estado do Home Theater
-    html = "<div class='card'><h2><i class='fa-solid fa-volume-high'></i> Home Theater</h2><div class='info-grid'>";
-    html += "<span class='label'>Sistema:</span><span class='value " + String(isSystemOn ? "status-ok'>LIGADO" : "'>DESLIGADO") + "</span>";
-    html += "<span class='label'>Bluetooth:</span><span class='value " + String(isBluetoothOn ? "status-ok'>ON" : "'>OFF") + "</span>";
-    html += "<span class='label'>Mute:</span><span class='value " + String(isMuteOn ? "status-warn'>ON" : "'>OFF") + "</span>";
-    html += "<span class='label'>DDD:</span><span class='value " + String(isDddOn ? "status-ok'>ON" : "'>OFF") + "</span>";
-    html += "<span class='label'>Volume Total:</span><span class='value'>" + String(currentTotalVol) + "/79 (" + String(map(currentTotalVol, 0, 79, 0, 100)) + "%)</span>";
-    html += "<span class='label'>Center:</span><span class='value'>" + String(currentCenterVol) + "/15</span>";
-    html += "<span class='label'>Subwoofer:</span><span class='value'>" + String(currentSubVol) + "/15</span>";
-    html += "<span class='label'>Front L/R:</span><span class='value'>" + String(currentFrontVol) + "/15</span>";
-    html += "<span class='label'>Rear L/R:</span><span class='value'>" + String(currentRearVol) + "/15</span>";
-    html += "</div></div>";
-    server.sendContent(html);
+    server.sendContent_P(PSTR("<span class='label'>SSID:</span><span class='value'>"));
+    server.sendContent(WiFi.SSID());
+    server.sendContent_P(PSTR("</span>"));
+    
+    snprintf_P(mediumBuffer, sizeof(mediumBuffer),
+               PSTR("<span class='label'>Canal:</span><span class='value'>%d</span>"),
+               WiFi.channel());
+    server.sendContent(mediumBuffer);
+    
+    server.sendContent_P(PSTR("<span class='label'>IP:</span><span class='value'>"));
+    server.sendContent(WiFi.localIP().toString());
+    server.sendContent_P(PSTR("</span><span class='label'>MAC:</span><span class='value'>"));
+    server.sendContent(WiFi.macAddress());
+    server.sendContent_P(PSTR("</span>"));
+    
+    snprintf_P(mediumBuffer, sizeof(mediumBuffer),
+               PSTR("<span class='label'>Signal:</span><span class='value %s'>%d dBm</span>"),
+               signalClass, rssi);
+    server.sendContent(mediumBuffer);
+    server.sendContent_P(PSTR("</div></div>"));
+    
+    yield();
+    
+    // Card 5: Estado do Home Theater
+    server.sendContent_P(PSTR("<div class='card'><h2><i class='fa-solid fa-volume-high'></i> Home Theater</h2><div class='info-grid'>"));
+    
+    snprintf_P(largeBuffer, sizeof(largeBuffer),
+               PSTR("<span class='label'>Sistema:</span><span class='value%s'>%s</span>"
+                    "<span class='label'>Bluetooth:</span><span class='value%s'>%s</span>"
+                    "<span class='label'>Mute:</span><span class='value%s'>%s</span>"
+                    "<span class='label'>DDD:</span><span class='value%s'>%s</span>"),
+               isSystemOn ? " status-ok" : "", isSystemOn ? "LIGADO" : "DESLIGADO",
+               isBluetoothOn ? " status-ok" : "", isBluetoothOn ? "ON" : "OFF",
+               isMuteOn ? " status-warn" : "", isMuteOn ? "ON" : "OFF",
+               isDddOn ? " status-ok" : "", isDddOn ? "ON" : "OFF");
+    server.sendContent(largeBuffer);
+    
+    snprintf_P(largeBuffer, sizeof(largeBuffer),
+               PSTR("<span class='label'>Volume Total:</span><span class='value'>%d/79 (%d%%)</span>"
+                    "<span class='label'>Center:</span><span class='value'>%d/15</span>"
+                    "<span class='label'>Subwoofer:</span><span class='value'>%d/15</span>"
+                    "<span class='label'>Front L/R:</span><span class='value'>%d/15</span>"
+                    "<span class='label'>Rear L/R:</span><span class='value'>%d/15</span>"),
+               currentTotalVol, map(currentTotalVol, 0, 79, 0, 100),
+               currentCenterVol, currentSubVol, currentFrontVol, currentRearVol);
+    server.sendContent(largeBuffer);
+    server.sendContent_P(PSTR("</div></div>"));
     
     server.sendContent_P(STATUS_PAGE_FOOTER);
     server.sendContent("");
 }
 
 // =============================================================================
-// 🌟 HANDLER DA API DE STATUS JSON
+// 🌟 HANDLER DA API DE STATUS JSON (OTIMIZADO)
 // =============================================================================
 void handleStatus() {
-    String json = "{";
-    json += "\"version\":\"2.5\",";
-    json += "\"uptime\":" + String(millis() / 1000) + ",";
-    json += "\"freeHeap\":" + String(ESP.getFreeHeap()) + ",";
-    json += "\"heapFragmentation\":" + String(ESP.getHeapFragmentation()) + ",";
-    json += "\"maxFreeBlockSize\":" + String(ESP.getMaxFreeBlockSize()) + ",";
-    json += "\"chipId\":\"" + String(ESP.getChipId(), HEX) + "\",";
-    json += "\"cpuFreqMHz\":" + String(ESP.getCpuFreqMHz()) + ",";
-    json += "\"flashChipSize\":" + String(ESP.getFlashChipSize()) + ",";
-    json += "\"flashChipSpeed\":" + String(ESP.getFlashChipSpeed() / 1000000) + ",";
-    json += "\"flashChipMode\":" + String(ESP.getFlashChipMode()) + ",";
-    json += "\"sketchSize\":" + String(ESP.getSketchSize()) + ",";
-    json += "\"freeSketchSpace\":" + String(ESP.getFreeSketchSpace()) + ",";
-    json += "\"sketchMD5\":\"" + ESP.getSketchMD5() + "\",";
-    json += "\"sdkVersion\":\"" + String(ESP.getSdkVersion()) + "\",";
-    json += "\"coreVersion\":\"" + ESP.getCoreVersion() + "\",";
-    json += "\"bootVersion\":" + String(ESP.getBootVersion()) + ",";
-    json += "\"bootMode\":" + String(ESP.getBootMode()) + ",";
-    json += "\"resetReason\":\"" + ESP.getResetReason() + "\",";
-    json += "\"resetInfo\":\"" + ESP.getResetInfo() + "\",";
-    json += "\"wifiSignal\":" + String(WiFi.RSSI()) + ",";
-    json += "\"ip\":\"" + WiFi.localIP().toString() + "\",";
-    json += "\"mac\":\"" + WiFi.macAddress() + "\",";
-    json += "\"ssid\":\"" + WiFi.SSID() + "\",";
-    json += "\"wifiChannel\":" + String(WiFi.channel()) + ",";
-    json += "\"isSystemOn\":" + String(isSystemOn ? "true" : "false") + ",";
-    json += "\"isBluetoothOn\":" + String(isBluetoothOn ? "true" : "false") + ",";
-    json += "\"isMuteOn\":" + String(isMuteOn ? "true" : "false") + ",";
-    json += "\"isDddOn\":" + String(isDddOn ? "true" : "false") + ",";
-    json += "\"volume\":" + String(currentTotalVol) + ",";
-    json += "\"centerVol\":" + String(currentCenterVol) + ",";
-    json += "\"subVol\":" + String(currentSubVol) + ",";
-    json += "\"frontVol\":" + String(currentFrontVol) + ",";
-    json += "\"rearVol\":" + String(currentRearVol);
-    json += "}";
+    // Usa largeBuffer para construir JSON de forma eficiente
+    snprintf_P(largeBuffer, sizeof(largeBuffer),
+               PSTR("{\"version\":\"2.5\",\"uptime\":%lu,\"freeHeap\":%d,\"heapFragmentation\":%d,"
+                    "\"maxFreeBlockSize\":%d,\"chipId\":\"%lx\",\"cpuFreqMHz\":%d,"),
+               millis() / 1000, ESP.getFreeHeap(), ESP.getHeapFragmentation(),
+               ESP.getMaxFreeBlockSize(), ESP.getChipId(), ESP.getCpuFreqMHz());
     
-    server.send(200, "application/json", json);
-    logMessage("API", "Status acessado de " + server.client().remoteIP().toString());
+    server.setContentLength(CONTENT_LENGTH_UNKNOWN);
+    server.send(200, "application/json", largeBuffer);
+    
+    snprintf_P(largeBuffer, sizeof(largeBuffer),
+               PSTR("\"flashChipSize\":%lu,\"flashChipSpeed\":%lu,\"flashChipMode\":%d,"
+                    "\"sketchSize\":%lu,\"freeSketchSpace\":%lu,"),
+               ESP.getFlashChipSize(), ESP.getFlashChipSpeed() / 1000000,
+               ESP.getFlashChipMode(), ESP.getSketchSize(), ESP.getFreeSketchSpace());
+    server.sendContent(largeBuffer);
+    
+    server.sendContent_P(PSTR("\"sketchMD5\":\""));
+    server.sendContent(ESP.getSketchMD5());
+    server.sendContent_P(PSTR("\",\"sdkVersion\":\""));
+    server.sendContent(ESP.getSdkVersion());
+    server.sendContent_P(PSTR("\",\"coreVersion\":\""));
+    server.sendContent(ESP.getCoreVersion());
+    server.sendContent_P(PSTR("\","));
+    
+    snprintf_P(largeBuffer, sizeof(largeBuffer),
+               PSTR("\"bootVersion\":%d,\"bootMode\":%d,\"resetReason\":\""),
+               ESP.getBootVersion(), ESP.getBootMode());
+    server.sendContent(largeBuffer);
+    server.sendContent(ESP.getResetReason());
+    server.sendContent_P(PSTR("\",\"resetInfo\":\""));
+    server.sendContent(ESP.getResetInfo());
+    server.sendContent_P(PSTR("\","));
+    
+    snprintf_P(largeBuffer, sizeof(largeBuffer),
+               PSTR("\"wifiSignal\":%d,\"ip\":\"%s\",\"mac\":\"%s\",\"ssid\":\"%s\","
+                    "\"wifiChannel\":%d,\"isSystemOn\":%s,\"isBluetoothOn\":%s,"
+                    "\"isMuteOn\":%s,\"isDddOn\":%s,\"volume\":%d,\"centerVol\":%d,"
+                    "\"subVol\":%d,\"frontVol\":%d,\"rearVol\":%d}"),
+               WiFi.RSSI(), WiFi.localIP().toString().c_str(), WiFi.macAddress().c_str(),
+               WiFi.SSID().c_str(), WiFi.channel(),
+               isSystemOn ? "true" : "false", isBluetoothOn ? "true" : "false",
+               isMuteOn ? "true" : "false", isDddOn ? "true" : "false",
+               currentTotalVol, currentCenterVol, currentSubVol, currentFrontVol, currentRearVol);
+    server.sendContent(largeBuffer);
+    server.sendContent("");
+    
+    logMessage("API", "Status: " + maskIP(server.client().remoteIP()));
 }
 
 // =============================================================================
-// ✅ NOVO: HANDLER DA PÁGINA WEB (COM PROGMEM)
+// ✅ HANDLER DA PÁGINA WEB (OTIMIZADO)
 // =============================================================================
 void handleRoot() {
-    // Log de acesso (IP mascarado por segurança)
-    String clientIP = server.client().remoteIP().toString();
-    String clientMasked = clientIP.substring(0, clientIP.indexOf('.', clientIP.indexOf('.') + 1)) + ".xxx.xxx";
-    logMessage("WEB", "Página acessada de " + clientMasked);
+    logMessage("WEB", "Página: " + maskIP(server.client().remoteIP()));
     
-    // Envia HTML em chunks para economizar RAM
     server.setContentLength(CONTENT_LENGTH_UNKNOWN);
     server.send(200, "text/html", "");
-    
-    // Envia header da Flash (PROGMEM)
     server.sendContent_P(HTML_HEADER);
     
-    // Gera botões dinamicamente
+    // Gera botões usando buffer reutilizável
     struct Button { const char* id; const char* icon; const char* iconClass; bool state; };
-    Button buttons[] = {
+    const Button buttons[] = {
         {"system", "power-off", "fa-solid", isSystemOn},
         {"bluetooth", "bluetooth-b", "fa-brands", isBluetoothOn},
         {"mute", "volume-mute", "fa-solid", isMuteOn},
@@ -389,26 +483,20 @@ void handleRoot() {
         {"audio51", "arrows-left-right-to-line", "fa-solid", false}
     };
     
-    String btnHtml = "";
-    for (Button btn : buttons) {
-        btnHtml = "<button id='";
-        btnHtml += btn.id;
-        btnHtml += "Button' class='";
-        btnHtml += (strcmp(btn.id, "audioIn") == 0 || strcmp(btn.id, "audio51") == 0) ? "red" : (btn.state ? "green" : "red");
-        btnHtml += "' onclick='toggleButton(\"";
-        btnHtml += btn.id;
-        btnHtml += "\")'><i class='";
-        btnHtml += btn.iconClass;
-        btnHtml += " fa-";
-        btnHtml += btn.icon;
-        btnHtml += "'></i></button>";
+    for (const Button& btn : buttons) {
+        const char* btnClass = (strcmp(btn.id, "audioIn") == 0 || strcmp(btn.id, "audio51") == 0) 
+                               ? "red" : (btn.state ? "green" : "red");
         
-        server.sendContent(btnHtml);
+        snprintf_P(mediumBuffer, sizeof(mediumBuffer),
+                   PSTR("<button id='%sButton' class='%s' onclick='toggleButton(\"%s\")'>"
+                        "<i class='%s fa-%s'></i></button>"),
+                   btn.id, btnClass, btn.id, btn.iconClass, btn.icon);
+        server.sendContent(mediumBuffer);
     }
     
-    // Gera sliders dinamicamente
+    // Gera sliders usando buffer reutilizável
     struct Slider { const char* id; const char* label; int min; int max; int value; };
-    Slider sliders[] = {
+    const Slider sliders[] = {
         {"total", "Volume Total", 0, 79, currentTotalVol},
         {"center", "Center", 0, 15, currentCenterVol},
         {"sub", "Subwoofer", 0, 15, currentSubVol},
@@ -416,77 +504,56 @@ void handleRoot() {
         {"rear", "Surround L/R", 0, 15, currentRearVol}
     };
     
-    String sliderHtml = "<form action='/setVolume' method='POST'>";
-    server.sendContent(sliderHtml);
+    server.sendContent_P(PSTR("<form action='/setVolume' method='POST'>"));
     
-    for (Slider s : sliders) {
-        sliderHtml = "<label class='form-text'>";
-        sliderHtml += s.label;
-        sliderHtml += "</label><input type='range' id='";
-        sliderHtml += s.id;
-        sliderHtml += "' name='";
-        sliderHtml += s.id;
-        sliderHtml += "' min='";
-        sliderHtml += s.min;
-        sliderHtml += "' max='";
-        sliderHtml += s.max;
-        sliderHtml += "' value='";
-        sliderHtml += s.value;
-        sliderHtml += "' oninput='updateVolume(this)'><br>";
-        
-        server.sendContent(sliderHtml);
+    for (const Slider& s : sliders) {
+        snprintf_P(mediumBuffer, sizeof(mediumBuffer),
+                   PSTR("<label class='form-text'>%s</label>"
+                        "<input type='range' id='%s' name='%s' min='%d' max='%d' value='%d' "
+                        "oninput='updateVolume(this)'><br>"),
+                   s.label, s.id, s.id, s.min, s.max, s.value);
+        server.sendContent(mediumBuffer);
     }
     
-    server.sendContent("</form>");
-    
-    // Envia footer da Flash (PROGMEM)
+    server.sendContent_P(PSTR("</form>"));
     server.sendContent_P(HTML_FOOTER);
     server.sendContent("");
 }
 
 // =============================================================================
-// HANDLERS HTTP
+// HANDLERS HTTP (OTIMIZADOS)
 // =============================================================================
 void handleSetFunc() {
     String func = server.arg("func");
     bool state = server.arg("state").toInt() != 0;
     
-    // Log de ação
-    String clientIP = server.client().remoteIP().toString();
-    String clientMasked = clientIP.substring(0, clientIP.indexOf('.', clientIP.indexOf('.') + 1)) + ".xxx.xxx";
-    logMessage("WEB", "Função '" + func + "' acionada de " + clientMasked);
+    logMessage("WEB", "Função '" + func + "' de " + maskIP(server.client().remoteIP()));
     
     if (func == "audioIn") {
         digitalWrite(AUDIO_IN_PIN, HIGH);
         delay(100);
         digitalWrite(AUDIO_IN_PIN, LOW);
-        if (loggingEnabled) {
-            Serial.println("Audio In pulse sent.");
-        }
+        if (loggingEnabled) Serial.println(F("Audio In pulse sent"));
     } else if (func == "bluetooth") {
-        togglePin(BLUETOOTH_PIN, state, loggingEnabled ? (state ? "Bluetooth turned on" : "Bluetooth turned off") : "");
+        togglePin(BLUETOOTH_PIN, state, loggingEnabled ? (state ? "Bluetooth on" : "Bluetooth off") : "");
         isBluetoothOn = state;
     } else if (func == "system") {
-        // Atualiza estado e notifica SinricPro
         isSystemOn = state;
         setPowerState(state);
     } else if (func == "mute") {
-        // Aplica no hardware
         isMuteOn = state;
-        currentMute = state ? 1 : 0;
-        pt.setFunc(currentMute, currentDdd, currentTemb);
-        
-        // 🌟 Notifica SinricPro manualmente (não usar callback)
+        int currentMute = state ? 1 : 0;
+        int currentDdd = isDddOn ? 1 : 0;
+        pt.setFunc(currentMute, currentDdd, 0);
         speaker.sendMuteEvent(state);
-        
         if (loggingEnabled) {
-            logMessage("INFO", "[WEB] Mute " + String(state ? "ON" : "OFF") + " → SinricPro notificado");
+            logMessage("INFO", "[WEB] Mute " + String(state ? "ON" : "OFF") + " → SinricPro");
         }
     } else if (func == "ddd") {
-        // Atualiza estado
         isDddOn = state;
-        currentDdd = state ? 1 : 0;
-        pt.setFunc(currentMute, currentDdd, currentTemb);
+        int currentMute = isMuteOn ? 1 : 0;
+        int currentDdd = state ? 1 : 0;
+        pt.setFunc(currentMute, currentDdd, 0);
         if (loggingEnabled) {
             logMessage("INFO", "[WEB] DDD " + String(state ? "ON" : "OFF"));
         }
@@ -494,57 +561,112 @@ void handleSetFunc() {
         togglePin(AUDIO_51_PIN, true, "");
         delay(100);
         togglePin(AUDIO_51_PIN, false, "");
-        if (loggingEnabled) {
-            Serial.println("5.1 audio pulse sent");
-        }
+        if (loggingEnabled) Serial.println(F("5.1 audio pulse sent"));
     }
     
-    server.send(200, "text/plain", func + " state updated");
+    server.send(200, "text/plain", func + " updated");
 }
 
 void handleSetVolume() {
-    // Log apenas se for volume total (evita spam de logs)
     if (server.hasArg("total")) {
-        String clientIP = server.client().remoteIP().toString();
-        String clientMasked = clientIP.substring(0, clientIP.indexOf('.', clientIP.indexOf('.') + 1)) + ".xxx.xxx";
-        
         currentTotalVol = constrain(server.arg("total").toInt(), 0, 79);
         pt.setVol(currentTotalVol);
         updateVolume(currentTotalVol);
         if (loggingEnabled) {
-            logMessage("WEB", "Volume alterado para " + String(currentTotalVol) + " por " + clientMasked);
+            logMessage("WEB", "Volume " + String(currentTotalVol) + " de " + maskIP(server.client().remoteIP()));
         }
     }
     if (server.hasArg("center")) {
         currentCenterVol = server.arg("center").toInt();
         pt.setCenter_att(15 - currentCenterVol);
-        if (loggingEnabled) {
-            logMessage("INFO", "Center volume set to: " + String(currentCenterVol));
-        }
+        if (loggingEnabled) logMessage("INFO", "Center: " + String(currentCenterVol));
     }
     if (server.hasArg("sub")) {
         currentSubVol = server.arg("sub").toInt();
         pt.setSub_att(15 - currentSubVol);
-        if (loggingEnabled) {
-            logMessage("INFO", "Subwoofer volume set to: " + String(currentSubVol));
-        }
+        if (loggingEnabled) logMessage("INFO", "Sub: " + String(currentSubVol));
     }
     if (server.hasArg("front")) {
         currentFrontVol = server.arg("front").toInt();
         pt.setFront_lk_att(15 - currentFrontVol);
         pt.setFront_rk_att(15 - currentFrontVol);
-        if (loggingEnabled) {
-            logMessage("INFO", "Front volume set to: " + String(currentFrontVol));
-        }
+        if (loggingEnabled) logMessage("INFO", "Front: " + String(currentFrontVol));
     }
     if (server.hasArg("rear")) {
         currentRearVol = server.arg("rear").toInt();
         pt.setRear_lk_att(15 - currentRearVol);
         pt.setRear_rk_att(15 - currentRearVol);
-        if (loggingEnabled) {
-            logMessage("INFO", "Rear volume set to: " + String(currentRearVol));
-        }
+        if (loggingEnabled) logMessage("INFO", "Rear: " + String(currentRearVol));
     }
+}
+
+// =============================================================================
+// 🎵 TEST TONE HANDLERS (CALIBRAÇÃO)
+// =============================================================================
+void handleTestTone() {
+    String channel = server.arg("channel");
+    
+    testToneActive = true;
+    activeTestChannel = channel;
+    
+    // Silencia todos os canais primeiro (15 = mudo)
+    pt.setCenter_att(15);
+    pt.setSub_att(15);
+    pt.setFront_lk_att(15);
+    pt.setFront_rk_att(15);
+    pt.setRear_lk_att(15);
+    pt.setRear_rk_att(15);
+    
+    // Ativa apenas o canal de teste (0 = volume normal)
+    if (channel == "front_left") {
+        pt.setFront_lk_att(15 - currentFrontVol);
+    } else if (channel == "front_right") {
+        pt.setFront_rk_att(15 - currentFrontVol);
+    } else if (channel == "center") {
+        pt.setCenter_att(15 - currentCenterVol);
+    } else if (channel == "subwoofer") {
+        pt.setSub_att(15 - currentSubVol);
+    } else if (channel == "rear_left") {
+        pt.setRear_lk_att(15 - currentRearVol);
+    } else if (channel == "rear_right") {
+        pt.setRear_rk_att(15 - currentRearVol);
+    } else if (channel == "all") {
+        // Restaura todos os canais
+        pt.setCenter_att(15 - currentCenterVol);
+        pt.setSub_att(15 - currentSubVol);
+        pt.setFront_lk_att(15 - currentFrontVol);
+        pt.setFront_rk_att(15 - currentFrontVol);
+        pt.setRear_lk_att(15 - currentRearVol);
+        pt.setRear_rk_att(15 - currentRearVol);
+    }
+    
+    logMessage("TEST", "Testando canal: " + channel);
+    server.send(200, "text/plain", "Test started");
+}
+
+void handleStopTest() {
+    testToneActive = false;
+    activeTestChannel = "";
+    
+    // Restaura volumes originais
+    pt.setVol(currentTotalVol);
+    pt.setCenter_att(15 - currentCenterVol);
+    pt.setSub_att(15 - currentSubVol);
+    pt.setFront_lk_att(15 - currentFrontVol);
+    pt.setFront_rk_att(15 - currentFrontVol);
+    pt.setRear_lk_att(15 - currentRearVol);
+    pt.setRear_rk_att(15 - currentRearVol);
+    
+    logMessage("TEST", "Teste finalizado");
+    server.send(200, "text/plain", "Test stopped");
+}
+
+void handleTestPage() {
+    logMessage("WEB", "Test page: " + maskIP(server.client().remoteIP()));
+    server.setContentLength(CONTENT_LENGTH_UNKNOWN);
+    server.send(200, "text/html", "");
+    server.sendContent_P(TEST_TONE_PAGE);
+    server.sendContent("");
 }
 
 // =============================================================================
@@ -630,8 +752,11 @@ void setupServer() {
     server.on("/", handleRoot);
     server.on("/setVolume", handleSetVolume);
     server.on("/setFunc", HTTP_POST, handleSetFunc);
-    server.on("/status", handleStatus);           // API JSON
-    server.on("/status-page", handleStatusPage);  // 🌟 Página HTML visual
+    server.on("/status", handleStatus);
+    server.on("/status-page", handleStatusPage);
+    server.on("/test-tone.html", handleTestPage);     // 🎵 Página de teste
+    server.on("/testTone", HTTP_POST, handleTestTone); // 🎵 API de teste
+    server.on("/stopTest", HTTP_POST, handleStopTest); // 🎵 Parar teste
     server.begin();
     logMessage("INFO", "✅ HTTP server iniciado na porta 80");
 }
@@ -665,96 +790,78 @@ void applySettings() {
     pt.setFront_rk_att(15 - currentFrontVol);
     pt.setRear_lk_att(15 - currentRearVol);
     pt.setRear_rk_att(15 - currentRearVol);
-    pt.setFunc(currentMute, currentDdd, currentTemb);
-    pt.setBass(currentBassValue);
-    pt.setMiddle(currentMiddleValue);
-    pt.setTreble(currentTrebleValue);
-    logMessage("INFO", "✅ Configurações aplicadas ao PT2322");
+    pt.setFunc(0, 1, 0);  // Mute OFF, DDD ON, Temb 0
+    pt.setBass(0);
+    pt.setMiddle(0);
+    pt.setTreble(0);
+    logMessage("INFO", "✅ PT2322 configurado");
 }
 
 // =============================================================================
 // SETUP PRINCIPAL
 // =============================================================================
 void setup() {
-    Serial.begin(9600);
-    delay(500);  // Aguarda serial estabilizar
+    Serial.begin(115200);  // ✅ Otimizado para ESP8266
+    delay(100);
     
     if (loggingEnabled) {
-        Serial.println("\n\n");
-        Serial.println("===========================================");
-        Serial.println("  HOME THEATER CONTROL v2.5");
-        Serial.println("  OnlyCampe - 2025");
-        Serial.println("===========================================");
+        Serial.println(F("\n\n==========================================="));
+        Serial.println(F("  HOME THEATER CONTROL v2.5"));
+        Serial.println(F("  OnlyCampe - 2025"));
+        Serial.println(F("==========================================="));
     }
     
-    logMessage("INFO", "🌟 Iniciando sistema...");
-    logMessage("INFO", "💡 Valores padrão carregados (mudanças são temporárias)");
+    logMessage("INFO", F("🌟 Sistema iniciando..."));
     
     // WiFi Manager Setup
     WiFiManager wifiManager;
-    wifiManager.setConfigPortalTimeout(180);  // 3 minutos de timeout
+    wifiManager.setConfigPortalTimeout(180);
     
-    logMessage("INFO", "Conectando ao WiFi...");
+    logMessage("INFO", F("Conectando WiFi..."));
     if (!wifiManager.autoConnect(WIFI_AP_NAME, WIFI_AP_PASSWORD)) {
-        logMessage("ERROR", "❌ Falha ao conectar WiFi. Reiniciando...");
+        logMessage("ERROR", F("❌ Falha WiFi. Reiniciando..."));
         delay(3000);
         ESP.restart();
     }
     
-    logMessage("INFO", "✅ WiFi conectado!");
+    logMessage("INFO", F("✅ WiFi conectado!"));
     logMessage("INFO", "IP: " + WiFi.localIP().toString());
     logMessage("INFO", "MAC: " + WiFi.macAddress());
-    logMessage("INFO", "Signal: " + String(WiFi.RSSI()) + " dBm");
+    snprintf_P(smallBuffer, sizeof(smallBuffer), PSTR("Signal: %d dBm"), WiFi.RSSI());
+    logMessage("INFO", smallBuffer);
     
     setupMDNS();
     setupServer();
     setupPins();
-    
-    // 🌟 Configura OTA
     setupOTA();
     
-    // Configurar callbacks do SinricPro
+    // Callbacks SinricPro
     speaker.onPowerState(onPowerState);
     speaker.onMute(onMute);
     speaker.onSetVolume([](const String &deviceId, int &volume) -> bool {
         return onSetVolume(deviceId, volume);
     });
     
-    // Callbacks de conexão SinricPro
-    SinricPro.onConnected([]() {
-        logMessage("INFO", "✅ [SinricPro] Conectado");
-    });
-    
-    SinricPro.onDisconnected([]() {
-        logMessage("WARNING", "⚠️ [SinricPro] Desconectado");
-    });
-    
+    SinricPro.onConnected([]() { logMessage("INFO", F("✅ [SinricPro] Conectado")); });
+    SinricPro.onDisconnected([]() { logMessage("WARNING", F("⚠️ [SinricPro] Desconectado")); });
     SinricPro.begin(APP_KEY, APP_SECRET);
     
     applySettings();
     
     if (loggingEnabled) {
-        Serial.println("\n===========================================");
-        Serial.println("  ✅ SISTEMA PRONTO!");
-        Serial.println("\n  📱 ACESSE NO NAVEGADOR:");
-        Serial.print("     http://");
+        Serial.println(F("\n==========================================="));
+        Serial.println(F("  ✅ SISTEMA PRONTO!"));
+        Serial.println(F("\n  📱 ACESSE:"));
+        Serial.print(F("     http://"));
         Serial.print(MDNS_NAME);
-        Serial.println(".local");
-        Serial.print("     http://");
+        Serial.println(F(".local"));
+        Serial.print(F("     http://"));
         Serial.print(MDNS_ALIAS);
-        Serial.println(".local");
-        Serial.print("     http://");
+        Serial.println(F(".local"));
+        Serial.print(F("     http://"));
         Serial.println(WiFi.localIP());
-        Serial.println("\n  📊 Status/API:");
-        Serial.print("     http://");
-        Serial.print(MDNS_NAME);
-        Serial.println(".local/status");
-        Serial.print("     http://");
-        Serial.print(WiFi.localIP());
-        Serial.println("/status");
-        Serial.println("\n  💡 Se .local não funcionar, instale Bonjour");
-        Serial.println("     ou use o IP direto (sempre funciona)");
-        Serial.println("===========================================\n");
+        Serial.println(F("\n  📊 Status: /status ou /status-page"));
+        Serial.println(F("===========================================\n"));
     }
 }
 
