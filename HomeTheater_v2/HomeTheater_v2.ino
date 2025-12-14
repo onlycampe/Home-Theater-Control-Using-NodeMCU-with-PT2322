@@ -50,7 +50,7 @@ PT2322 pt;
 bool isSystemOn = false;
 bool isBluetoothOn = false;
 bool isMuteOn = false;
-bool isDddOn = true;
+bool isDddOn = true;  
 bool loggingEnabled = ENABLE_SERIAL_LOGGING;
 
 // Test Channel State
@@ -132,9 +132,9 @@ void logMessage(const char* level, const String& message) {
 // PIN CONTROL FUNCTIONS
 // =============================================================================
 void togglePin(int pin, bool state, const String &message) {
-    pinMode(pin, OUTPUT);
-    digitalWrite(pin, state ? HIGH : LOW);
-    if (loggingEnabled && !message.isEmpty()) {
+  pinMode(pin, OUTPUT);
+  digitalWrite(pin, state ? HIGH : LOW);
+  if (loggingEnabled && !message.isEmpty()) {
         logMessage("INFO", message);
     }
 }
@@ -143,13 +143,13 @@ void togglePin(int pin, bool state, const String &message) {
 // STATE UPDATE FUNCTIONS
 // =============================================================================
 void updatePowerState(bool state) {
-    speaker.sendPowerStateEvent(state);
+  speaker.sendPowerStateEvent(state);
 }
 
 void updateVolume(int volume) {
-    unsigned long currentTime = millis();
-    lastVolumeSent = volume;
-    lastVolumeUpdateTime = currentTime;
+  unsigned long currentTime = millis();
+  lastVolumeSent = volume;
+  lastVolumeUpdateTime = currentTime;
 }
 
 // =============================================================================
@@ -272,26 +272,26 @@ bool onSetVolume(const String &deviceId, int volume) {
     // Update SinricPro immediately with final value (even if PT2322 is still transitioning)
     updateVolume(targetTotalVol);
     
-    if (loggingEnabled) {
+  if (loggingEnabled) {
         String source = deviceId.isEmpty() ? "WEB/IR" : "SinricPro";
         int percent = map(targetTotalVol, 0, 79, 0, 100);
         logMessage("INFO", "[" + source + "] Volume target: " + String(targetTotalVol) + "/79 (" + String(percent) + "%) - Smooth transition");
-    }
+  }
     
-    return true;
+  return true;
 }
 
 bool onMute(const String &deviceId, bool &mute) {
-    isMuteOn = mute;
+  isMuteOn = mute;
     int currentMute = mute ? 1 : 0;
     int currentDdd = isDddOn ? 1 : 0;
     pt.setFunc(currentMute, currentDdd, 0);
     
-    if (loggingEnabled) {
+  if (loggingEnabled) {
         String source = deviceId.isEmpty() ? "WEB" : "SinricPro";
         logMessage("INFO", "[" + source + "] Mute " + String(mute ? "ON" : "OFF"));
-    }
-    return true;
+  }
+  return true;
 }
 
 bool onDdd(const String &deviceId, bool &state) {
@@ -300,11 +300,11 @@ bool onDdd(const String &deviceId, bool &state) {
     int currentDdd = state ? 1 : 0;
     pt.setFunc(currentMute, currentDdd, 0);
     
-    if (loggingEnabled) {
+  if (loggingEnabled) {
         String source = deviceId.isEmpty() ? "WEB" : "SinricPro";
         logMessage("INFO", "[" + source + "] DDD " + String(state ? "ON" : "OFF"));
-    }
-    return true;
+  }
+  return true;
 }
 
 // =============================================================================
@@ -582,37 +582,37 @@ void handleRoot() {
 // HANDLERS HTTP (OTIMIZADOS)
 // =============================================================================
 void handleSetFunc() {
-    String func = server.arg("func");
-    bool state = server.arg("state").toInt() != 0;
+  String func = server.arg("func");
+  bool state = server.arg("state").toInt() != 0;
     
     logMessage("WEB", "Função '" + func + "' de " + maskIP(server.client().remoteIP()));
     
-    if (func == "audioIn") {
-        digitalWrite(AUDIO_IN_PIN, HIGH);
-        delay(100);
-        digitalWrite(AUDIO_IN_PIN, LOW);
+  if (func == "audioIn") {
+    digitalWrite(AUDIO_IN_PIN, HIGH);
+    delay(100);
+    digitalWrite(AUDIO_IN_PIN, LOW);
         if (loggingEnabled) Serial.println(F("Audio In pulse sent"));
-    } else if (func == "bluetooth") {
+  } else if (func == "bluetooth") {
         togglePin(BLUETOOTH_PIN, state, loggingEnabled ? (state ? "Bluetooth on" : "Bluetooth off") : "");
-        isBluetoothOn = state;
-    } else if (func == "system") {
+    isBluetoothOn = state;
+  } else if (func == "system") {
         isSystemOn = state;
         setPowerState(state);
-    } else if (func == "mute") {
-        isMuteOn = state;
+  } else if (func == "mute") {
+    isMuteOn = state;
         int currentMute = state ? 1 : 0;
         int currentDdd = isDddOn ? 1 : 0;
         pt.setFunc(currentMute, currentDdd, 0);
         speaker.sendMuteEvent(state);
-        if (loggingEnabled) {
+    if (loggingEnabled) {
             logMessage("INFO", "[WEB] Mute " + String(state ? "ON" : "OFF") + " → SinricPro");
         }
-    } else if (func == "ddd") {
+  } else if (func == "ddd") {
         isDddOn = state;
         int currentMute = isMuteOn ? 1 : 0;
         int currentDdd = state ? 1 : 0;
         pt.setFunc(currentMute, currentDdd, 0);
-        if (loggingEnabled) {
+  if (loggingEnabled) {
             logMessage("INFO", "[WEB] DDD " + String(state ? "ON" : "OFF"));
         }
     } else if (func == "audio51") {
@@ -626,37 +626,40 @@ void handleSetFunc() {
 }
 
 void handleSetVolume() {
-    if (server.hasArg("total")) {
+  if (server.hasArg("total")) {
         targetTotalVol = constrain(server.arg("total").toInt(), 0, 79);
         // Don't set pt.setVol here - let handleSmoothVolumeTransition() do it gradually
         updateVolume(targetTotalVol);
-        if (loggingEnabled) {
+    if (loggingEnabled) {
             int percent = map(targetTotalVol, 0, 79, 0, 100);
             logMessage("WEB", "Volume target: " + String(targetTotalVol) + "/79 (" + String(percent) + "%) from " + maskIP(server.client().remoteIP()));
-        }
     }
-    if (server.hasArg("center")) {
-        currentCenterVol = server.arg("center").toInt();
-        pt.setCenter_att(15 - currentCenterVol);
+  }
+  if (server.hasArg("center")) {
+    currentCenterVol = server.arg("center").toInt();
+    pt.setCenter_att(15 - currentCenterVol);
         if (loggingEnabled) logMessage("INFO", "Center: " + String(currentCenterVol));
-    }
-    if (server.hasArg("sub")) {
-        currentSubVol = server.arg("sub").toInt();
-        pt.setSub_att(15 - currentSubVol);
+  }
+  if (server.hasArg("sub")) {
+    currentSubVol = server.arg("sub").toInt();
+    pt.setSub_att(15 - currentSubVol);
         if (loggingEnabled) logMessage("INFO", "Sub: " + String(currentSubVol));
-    }
-    if (server.hasArg("front")) {
-        currentFrontVol = server.arg("front").toInt();
-        pt.setFront_lk_att(15 - currentFrontVol);
-        pt.setFront_rk_att(15 - currentFrontVol);
+  }
+  if (server.hasArg("front")) {
+    currentFrontVol = server.arg("front").toInt();
+    pt.setFront_lk_att(15 - currentFrontVol);
+    pt.setFront_rk_att(15 - currentFrontVol);
         if (loggingEnabled) logMessage("INFO", "Front: " + String(currentFrontVol));
-    }
-    if (server.hasArg("rear")) {
-        currentRearVol = server.arg("rear").toInt();
+  }
+  if (server.hasArg("rear")) {
+    currentRearVol = server.arg("rear").toInt();
         pt.setRear_lk_att(15 - currentRearVol);
         pt.setRear_rk_att(15 - currentRearVol);
         if (loggingEnabled) logMessage("INFO", "Rear: " + String(currentRearVol));
     }
+    
+    // ✅ Send HTTP response to browser
+    server.send(200, "text/plain", "OK");
 }
 
 // =============================================================================
@@ -732,21 +735,21 @@ void handleTestPage() {
 // PROCESSAMENTO DE COMANDOS IR
 // =============================================================================
 void processIRCommand(decode_results *results) {
-    if (results->decode_type != UNKNOWN) {
-        switch (results->value) {
-            case 0xE0E0E01F:
-                onSetVolume("", constrain(currentTotalVol + 1, 0, 79));
-                break;
-            case 0xE0E0D02F:
-                onSetVolume("", constrain(currentTotalVol - 1, 0, 79));
-                break;
-            case 0xE0E0F00F:
-                isSystemOn = !isSystemOn;
-                onPowerState("", isSystemOn);
-                break;
-        }
+  if (results->decode_type != UNKNOWN) {
+    switch (results->value) {
+      case 0xE0E0E01F:
+        onSetVolume("", constrain(currentTotalVol + 1, 0, 79));
+        break;
+      case 0xE0E0D02F:
+        onSetVolume("", constrain(currentTotalVol - 1, 0, 79));
+        break;
+      case 0xE0E0F00F:
+        isSystemOn = !isSystemOn;
+        onPowerState("", isSystemOn);
+        break;
     }
-    irrecv.resume();
+  }
+  irrecv.resume();
 }
 
 // =============================================================================
@@ -808,30 +811,30 @@ void setupMDNS() {
 }
 
 void setupServer() {
-    server.on("/", handleRoot);
-    server.on("/setVolume", handleSetVolume);
-    server.on("/setFunc", HTTP_POST, handleSetFunc);
+  server.on("/", handleRoot);
+  server.on("/setVolume", handleSetVolume);
+  server.on("/setFunc", HTTP_POST, handleSetFunc);
     server.on("/status", handleStatus);
     server.on("/status-page", handleStatusPage);
     server.on("/test-tone.html", handleTestPage);     // 🎵 Test page
     server.on("/testTone", HTTP_POST, handleTestTone); // 🎵 Test API
     server.on("/stopTest", HTTP_POST, handleStopTest); // 🎵 Stop test
-    server.begin();
+  server.begin();
     logMessage("INFO", "✅ HTTP server iniciado na porta 80");
 }
 
 void setupPins() {
     // ✅ Output pin configuration (removed duplicate code)
-    pinMode(PSON_PIN, OUTPUT);
-    pinMode(BLUETOOTH_PIN, OUTPUT);
-    pinMode(AUDIO_IN_PIN, OUTPUT);
+  pinMode(PSON_PIN, OUTPUT);
+  pinMode(BLUETOOTH_PIN, OUTPUT);
+  pinMode(AUDIO_IN_PIN, OUTPUT);
     pinMode(AUDIO_51_PIN, OUTPUT);
     pinMode(RELAY_PIN, OUTPUT);
-    
+  
     // Pin initialization
-    digitalWrite(PSON_PIN, LOW);
-    digitalWrite(BLUETOOTH_PIN, LOW);
-    digitalWrite(AUDIO_IN_PIN, LOW);
+  digitalWrite(PSON_PIN, LOW);
+  digitalWrite(BLUETOOTH_PIN, LOW);
+  digitalWrite(AUDIO_IN_PIN, LOW);
     digitalWrite(AUDIO_51_PIN, LOW);
     digitalWrite(RELAY_PIN, LOW);
     
@@ -906,8 +909,8 @@ void setup() {
     SinricPro.begin(APP_KEY, APP_SECRET);
     
     applySettings();
-    
-    if (loggingEnabled) {
+  
+  if (loggingEnabled) {
         Serial.println(F("\n==========================================="));
         Serial.println(F("  ✅ SYSTEM READY!"));
         Serial.println(F("\n  📱 ACCESS:"));
@@ -934,13 +937,13 @@ void loop() {
     ArduinoOTA.handle();    // 🌟 Processa OTA
     yield();
     
-    server.handleClient();
+  server.handleClient();
     yield();
     
-    MDNS.update();
+  MDNS.update();
     yield();
     
-    SinricPro.handle();
+  SinricPro.handle();
     yield();
     
     // ✅ Process power sequence in non-blocking way
@@ -952,23 +955,23 @@ void loop() {
     yield();
     
     // Processa comandos de IR
-    if (irrecv.decode(&results)) {
-        if (loggingEnabled) {
+  if (irrecv.decode(&results)) {
+    if (loggingEnabled) {
             logMessage("IR", "Comando recebido: 0x" + String(results.value, HEX));
-        }
-        processIRCommand(&results);
+    }
+    processIRCommand(&results);
         irrecv.resume();
-    }
-    
+  }
+
     // Send volume events at defined intervals
-    unsigned long currentTime = millis();
-    if (currentTime - lastVolumeUpdateTime >= volumeUpdateInterval) {
-        if (lastVolumeSent != -1) {
-            speaker.sendVolumeEvent(lastVolumeSent);
-            lastVolumeSent = -1;
-        }
-        lastVolumeUpdateTime = currentTime;
+  unsigned long currentTime = millis();
+  if (currentTime - lastVolumeUpdateTime >= volumeUpdateInterval) {
+    if (lastVolumeSent != -1) {
+      speaker.sendVolumeEvent(lastVolumeSent);
+      lastVolumeSent = -1;
     }
-    
-    delay(1);
+    lastVolumeUpdateTime = currentTime;
+  }
+
+  delay(1);
 }

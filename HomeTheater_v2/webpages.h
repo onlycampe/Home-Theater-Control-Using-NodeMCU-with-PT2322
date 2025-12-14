@@ -68,13 +68,22 @@ const char HTML_FOOTER[] PROGMEM = R"=====(
 </div>
 </div>
 <script>
-let currentVolumeDisplay = {};
+let volumeDebounceTimer = {};
 function updateVolumeDisplay(el){
-    // Update display value in real-time (visual feedback only)
-    currentVolumeDisplay[el.name] = el.value;
+    // Clear previous timer for this slider
+    if(volumeDebounceTimer[el.name]){
+        clearTimeout(volumeDebounceTimer[el.name]);
+    }
+    // Send after 200ms of no movement (smooth dragging)
+    volumeDebounceTimer[el.name] = setTimeout(()=>{
+        fetch('/setVolume',{method:'POST',headers:{'Content-Type':'application/x-www-form-urlencoded'},body:`${el.name}=${el.value}`});
+    }, 200);
 }
 function sendVolume(el){
-    // Send to device only when slider is released
+    // Clear debounce timer and send immediately when released
+    if(volumeDebounceTimer[el.name]){
+        clearTimeout(volumeDebounceTimer[el.name]);
+    }
     fetch('/setVolume',{method:'POST',headers:{'Content-Type':'application/x-www-form-urlencoded'},body:`${el.name}=${el.value}`});
 }
 function toggleButton(id){let btn=document.getElementById(id+'Button');if(id==='audioIn'||id==='audio51'){btn.classList.add('pulse');setTimeout(()=>btn.classList.remove('pulse'),300);fetch('/setFunc',{method:'POST',headers:{'Content-Type':'application/x-www-form-urlencoded'},body:`func=${id}&state=1`});}else{fetch('/setFunc',{method:'POST',headers:{'Content-Type':'application/x-www-form-urlencoded'},body:`func=${id}&state=${btn.classList.contains('green')?'0':'1'}`}).then(()=>{btn.classList.toggle('red');btn.classList.toggle('green');});}}
