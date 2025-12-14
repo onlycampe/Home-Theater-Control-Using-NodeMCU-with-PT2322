@@ -1,0 +1,24 @@
+# Arquivo de configuração com credenciais sensíveis
+config.h
+
+# Arduino IDE - arquivos compilados
+*.ino.eep
+*.ino.elf
+*.ino.hex
+*.ino.map
+*.ino.with_bootloader.bin
+*.ino.bin
+
+# VSCode / Cursor
+.vscode/
+.cursor/
+
+# Arquivos de backup
+*~
+*.bak
+*.tmp
+
+# Sistema operacional
+.DS_Store
+Thumbs.db
+
