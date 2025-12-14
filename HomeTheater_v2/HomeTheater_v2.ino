@@ -81,6 +81,11 @@ unsigned long lastVolumeUpdateTime = 0;
 const unsigned long volumeUpdateInterval = 1000;
 int lastVolumeSent = -1;
 
+// 🎚️ Smooth volume transition variables
+int targetTotalVol = 53;           // Target volume from web/IR
+unsigned long lastVolumeStepTime = 0;
+const unsigned long volumeStepInterval = 10; // 10ms between steps (fast & smooth)
+
 // =============================================================================
 // 🌟 BUFFER POOL FOR MEMORY OPTIMIZATION
 // =============================================================================
@@ -95,6 +100,7 @@ bool onPowerState(const String &deviceId, bool &state);
 bool onSetVolume(const String &deviceId, int volume);
 bool onMute(const String &deviceId, bool &state);
 void handlePowerSequence();
+void handleSmoothVolumeTransition();
 void setupOTA();
 void logMessage(const char* level, const String& message);
 inline String maskIP(const IPAddress& ip);
@@ -201,6 +207,52 @@ void handlePowerSequence() {
 }
 
 // =============================================================================
+// 🎚️ SMOOTH VOLUME TRANSITION HANDLER
+// =============================================================================
+// Gradually transitions PT2322 volume from current to target
+// Uses adaptive steps: larger jumps for big differences, smaller for fine-tuning
+// Called continuously in loop() for smooth transitions
+void handleSmoothVolumeTransition() {
+    if (currentTotalVol == targetTotalVol) {
+        return; // Already at target
+    }
+    
+    unsigned long currentTime = millis();
+    if (currentTime - lastVolumeStepTime >= volumeStepInterval) {
+        lastVolumeStepTime = currentTime;
+        
+        // Calculate difference
+        int diff = abs(targetTotalVol - currentTotalVol);
+        
+        // Adaptive step size: faster for large differences, smooth for small
+        int stepSize;
+        if (diff > 20) {
+            stepSize = 3;      // Large jump (3 levels per 10ms)
+        } else if (diff > 10) {
+            stepSize = 2;      // Medium jump (2 levels per 10ms)
+        } else {
+            stepSize = 1;      // Fine control (1 level per 10ms)
+        }
+        
+        // Step towards target
+        if (currentTotalVol < targetTotalVol) {
+            currentTotalVol = min(currentTotalVol + stepSize, targetTotalVol);
+        } else if (currentTotalVol > targetTotalVol) {
+            currentTotalVol = max(currentTotalVol - stepSize, targetTotalVol);
+        }
+        
+        // Apply to PT2322 hardware
+        pt.setVol(currentTotalVol);
+        
+        // Log when target is reached
+        if (currentTotalVol == targetTotalVol && loggingEnabled) {
+            int percent = map(currentTotalVol, 0, 79, 0, 100);
+            logMessage("INFO", "✅ Volume transition complete: " + String(currentTotalVol) + "/79 (" + String(percent) + "%)");
+        }
+    }
+}
+
+// =============================================================================
 // CALLBACKS DO SINRICPRO
 // =============================================================================
 bool onPowerState(const String &deviceId, bool &state) {
@@ -212,14 +264,20 @@ bool onPowerState(const String &deviceId, bool &state) {
 }
 
 bool onSetVolume(const String &deviceId, int volume) {
-    currentTotalVol = constrain(volume, 0, 79);
-    pt.setVol(currentTotalVol);
-    updateVolume(currentTotalVol);
+    int newVol = constrain(volume, 0, 79);
+    
+    // Set target volume for smooth PT2322 transition
+    targetTotalVol = newVol;
+    
+    // Update SinricPro immediately with final value (even if PT2322 is still transitioning)
+    updateVolume(targetTotalVol);
+    
     if (loggingEnabled) {
         String source = deviceId.isEmpty() ? "WEB/IR" : "SinricPro";
-        int percent = map(currentTotalVol, 0, 79, 0, 100);
-        logMessage("INFO", "[" + source + "] Volume: " + String(currentTotalVol) + "/79 (" + String(percent) + "%)");
+        int percent = map(targetTotalVol, 0, 79, 0, 100);
+        logMessage("INFO", "[" + source + "] Volume target: " + String(targetTotalVol) + "/79 (" + String(percent) + "%) - Smooth transition");
     }
+    
     return true;
 }
 
@@ -510,7 +568,7 @@ void handleRoot() {
         snprintf_P(mediumBuffer, sizeof(mediumBuffer),
                    PSTR("<label class='form-text'>%s</label>"
                         "<input type='range' id='%s' name='%s' min='%d' max='%d' value='%d' "
-                        "oninput='updateVolume(this)'><br>"),
+                        "oninput='updateVolumeDisplay(this)' onchange='sendVolume(this)'><br>"),
                    s.label, s.id, s.id, s.min, s.max, s.value);
         server.sendContent(mediumBuffer);
     }
@@ -569,11 +627,12 @@ void handleSetFunc() {
 
 void handleSetVolume() {
     if (server.hasArg("total")) {
-        currentTotalVol = constrain(server.arg("total").toInt(), 0, 79);
-        pt.setVol(currentTotalVol);
-        updateVolume(currentTotalVol);
+        targetTotalVol = constrain(server.arg("total").toInt(), 0, 79);
+        // Don't set pt.setVol here - let handleSmoothVolumeTransition() do it gradually
+        updateVolume(targetTotalVol);
         if (loggingEnabled) {
-            logMessage("WEB", "Volume " + String(currentTotalVol) + " from " + maskIP(server.client().remoteIP()));
+            int percent = map(targetTotalVol, 0, 79, 0, 100);
+            logMessage("WEB", "Volume target: " + String(targetTotalVol) + "/79 (" + String(percent) + "%) from " + maskIP(server.client().remoteIP()));
         }
     }
     if (server.hasArg("center")) {
@@ -886,6 +945,11 @@ void loop() {
     
     // ✅ Process power sequence in non-blocking way
     handlePowerSequence();
+    yield();
+    
+    // 🎚️ Process smooth volume transition
+    handleSmoothVolumeTransition();
+    yield();
     
     // Processa comandos de IR
     if (irrecv.decode(&results)) {

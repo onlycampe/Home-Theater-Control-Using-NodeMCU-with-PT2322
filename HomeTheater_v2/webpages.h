@@ -68,7 +68,15 @@ const char HTML_FOOTER[] PROGMEM = R"=====(
 </div>
 </div>
 <script>
-function updateVolume(el){fetch('/setVolume',{method:'POST',headers:{'Content-Type':'application/x-www-form-urlencoded'},body:`${el.name}=${el.value}`});}
+let currentVolumeDisplay = {};
+function updateVolumeDisplay(el){
+    // Update display value in real-time (visual feedback only)
+    currentVolumeDisplay[el.name] = el.value;
+}
+function sendVolume(el){
+    // Send to device only when slider is released
+    fetch('/setVolume',{method:'POST',headers:{'Content-Type':'application/x-www-form-urlencoded'},body:`${el.name}=${el.value}`});
+}
 function toggleButton(id){let btn=document.getElementById(id+'Button');if(id==='audioIn'||id==='audio51'){btn.classList.add('pulse');setTimeout(()=>btn.classList.remove('pulse'),300);fetch('/setFunc',{method:'POST',headers:{'Content-Type':'application/x-www-form-urlencoded'},body:`func=${id}&state=1`});}else{fetch('/setFunc',{method:'POST',headers:{'Content-Type':'application/x-www-form-urlencoded'},body:`func=${id}&state=${btn.classList.contains('green')?'0':'1'}`}).then(()=>{btn.classList.toggle('red');btn.classList.toggle('green');});}}
 </script>
 </body>

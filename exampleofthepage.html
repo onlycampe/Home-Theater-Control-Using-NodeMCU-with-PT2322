@@ -70,23 +70,23 @@
         <!-- Volume Controls -->
         <form action='/setVolume' method='POST'>
             <label class='form-text'>Volume Total</label>
-            <input type='range' id='total' name='total' min='0' max='79' value='53' oninput='updateVolume(this)'>
+            <input type='range' id='total' name='total' min='0' max='79' value='53' oninput='updateVolumeDisplay(this)' onchange='sendVolume(this)'>
             <br>
             
             <label class='form-text'>Center</label>
-            <input type='range' id='center' name='center' min='0' max='15' value='10' oninput='updateVolume(this)'>
+            <input type='range' id='center' name='center' min='0' max='15' value='10' oninput='updateVolumeDisplay(this)' onchange='sendVolume(this)'>
             <br>
             
             <label class='form-text'>Subwoofer</label>
-            <input type='range' id='sub' name='sub' min='0' max='15' value='12' oninput='updateVolume(this)'>
+            <input type='range' id='sub' name='sub' min='0' max='15' value='12' oninput='updateVolumeDisplay(this)' onchange='sendVolume(this)'>
             <br>
             
             <label class='form-text'>Front L/R</label>
-            <input type='range' id='front' name='front' min='0' max='15' value='10' oninput='updateVolume(this)'>
+            <input type='range' id='front' name='front' min='0' max='15' value='10' oninput='updateVolumeDisplay(this)' onchange='sendVolume(this)'>
             <br>
             
             <label class='form-text'>Surround L/R</label>
-            <input type='range' id='rear' name='rear' min='0' max='15' value='10' oninput='updateVolume(this)'>
+            <input type='range' id='rear' name='rear' min='0' max='15' value='10' oninput='updateVolumeDisplay(this)' onchange='sendVolume(this)'>
             <br>
         </form>
         
@@ -107,7 +107,15 @@
     </div>
 </div>
 <script>
-    function updateVolume(el){fetch('/setVolume',{method:'POST',headers:{'Content-Type':'application/x-www-form-urlencoded'},body:`${el.name}=${el.value}`});}
+    let currentVolumeDisplay = {};
+    function updateVolumeDisplay(el){
+        // Update display value in real-time (visual feedback only)
+        currentVolumeDisplay[el.name] = el.value;
+    }
+    function sendVolume(el){
+        // Send to device only when slider is released
+        fetch('/setVolume',{method:'POST',headers:{'Content-Type':'application/x-www-form-urlencoded'},body:`${el.name}=${el.value}`});
+    }
     function toggleButton(id){let btn=document.getElementById(id+'Button');if(id==='audioIn'||id==='audio51'){btn.classList.add('pulse');setTimeout(()=>btn.classList.remove('pulse'),300);fetch('/setFunc',{method:'POST',headers:{'Content-Type':'application/x-www-form-urlencoded'},body:`func=${id}&state=1`});}else{fetch('/setFunc',{method:'POST',headers:{'Content-Type':'application/x-www-form-urlencoded'},body:`func=${id}&state=${btn.classList.contains('green')?'0':'1'}`}).then(()=>{btn.classList.toggle('red');btn.classList.toggle('green');});}}
 </script>
 
