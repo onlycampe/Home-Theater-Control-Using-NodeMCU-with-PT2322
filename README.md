@@ -1,407 +1,380 @@
 # 🎬 Home Theater Control System v2.5
 
-Sistema de controle de home theater baseado em ESP8266 (NodeMCU) com PT2322, controle via web interface responsiva, comandos de voz (Alexa), controle IR e atualizações OTA.
+Home theater control system based on ESP8266 (NodeMCU) with PT2322, web interface control, voice commands (Alexa), IR control, and OTA updates.
 
 ![Home Theater Control](img/Home.local.png)
 
 ---
 
-## ✨ Funcionalidades
+## ✨ Features
 
-### 🌐 Controle Web
-- Interface web moderna e responsiva (mobile + desktop)
-- Controle de volume total e individual (center, subwoofer, frontal, traseiro)
-- Toggle de sistema, Bluetooth, mute e 3D/DDD
-- Página de status com informações detalhadas do sistema
-- mDNS habilitado (`http://hometheater.local` e `http://home.local`)
+### 🌐 Web Control
+- Modern and responsive web interface (mobile + desktop)
+- Total and individual volume control (center, subwoofer, front, rear)
+- System toggle, Bluetooth, mute, and 3D/DDD
+- Status page with detailed system information
+- mDNS enabled (`http://hometheater.local` and `http://home.local`)
 
-### 🎙️ Controle por Voz (Alexa)
-- Integração com SinricPro
-- Ligar/desligar sistema
-- Ajustar volume
-- Silenciar/ativar som
+### 🎙️ Voice Control (Alexa)
+- SinricPro integration
+- Turn system on/off
+- Adjust volume
+- Mute/unmute
 
-### 📡 Outros Recursos
-- **OTA Updates**: Atualização de firmware pela rede WiFi (sem cabo USB!)
-- **IR Control**: Recepção de comandos infravermelhos
-- **WiFi Manager**: Configuração de WiFi via portal AP se não conectar
-- **Delays não-bloqueantes**: Sistema sempre responsivo
-- **HTML em PROGMEM**: Economiza ~3.5KB de RAM
-
----
-
-## 🔧 Hardware Necessário
-
-| Componente | Descrição |
-|------------|-----------|
-| **NodeMCU** | ESP8266 (testado com 4MB Flash) |
-| **PT2322** | Controlador de áudio 5.1 via I²C |
-| **IR Receiver** | Receptor infravermelho (ex: TSOP4838) |
-| **BC547** | Transistor NPN para controle de relés |
-| **Fonte ATX** | Alimentação do sistema (standby para NodeMCU) |
-| **HD Audio Rush** | Decoder de áudio 5.1 (opcional) |
-| **Módulo Bluetooth** | VHM-314 ou similar (opcional) |
-| **Relé** | Para controle do Bluetooth |
+### 📡 Other Features
+- **OTA Updates**: Firmware updates over WiFi (no USB cable!)
+- **IR Control**: Infrared command reception
+- **WiFi Manager**: WiFi configuration via AP portal if connection fails
+- **Non-blocking delays**: Always responsive system
+- **HTML in PROGMEM**: Saves ~3.5KB of RAM
 
 ---
 
-## 📌 Configuração de Pinos
+## 🔧 Required Hardware
+
+| Component | Description |
+|-----------|-------------|
+| **NodeMCU** | ESP8266 (tested with 4MB Flash) |
+| **PT2322** | 5.1 audio controller via I²C |
+| **IR Receiver** | Infrared receiver (e.g., TSOP4838) |
+| **BC547** | NPN transistor for relay control |
+| **ATX Power Supply** | System power (standby for NodeMCU) |
+| **HD Audio Rush** | 5.1 audio decoder (optional) |
+| **Bluetooth Module** | VHM-314 or similar (optional) |
+| **Relay** | For Bluetooth control |
+
+---
+
+## 📌 Pin Configuration
 
 ```cpp
 D1 (GPIO5)  → I²C SCL (PT2322)
 D2 (GPIO4)  → I²C SDA (PT2322)
-D3 (GPIO0)  → Relé de controle geral
-D4 (GPIO2)  → Receptor IR
+D3 (GPIO0)  → General control relay
+D4 (GPIO2)  → IR receiver
 D5 (GPIO14) → Audio Input Control (BC547 → HD Audio Rush)
-D6 (GPIO12) → Bluetooth Control (Relé)
-D7 (GPIO13) → Controle 5.1/2.1
-D8 (GPIO15) → PSON (Liga/desliga fonte ATX via BC547)
+D6 (GPIO12) → Bluetooth Control (Relay)
+D7 (GPIO13) → 5.1/2.1 control
+D8 (GPIO15) → PSON (ATX power supply on/off via BC547)
 ```
 
 ---
 
-## 🚀 Instalação e Configuração
+## 🚀 Installation and Setup
 
-### 1. Requisitos de Software
-- [Arduino IDE](https://www.arduino.cc/en/software) 1.8.x ou superior
-- **Placas ESP8266**:
-  - Abra Arduino IDE → Preferences
-  - Em "Additional Board Manager URLs" adicione:
+### 1. Software Requirements
+- [Arduino IDE](https://www.arduino.cc/en/software) 1.8.x or higher
+- **ESP8266 Boards**:
+  - Open Arduino IDE → Preferences
+  - In "Additional Board Manager URLs" add:
     ```
     http://arduino.esp8266.com/stable/package_esp8266com_index.json
     ```
-  - Vá em Tools → Board → Boards Manager
-  - Instale "esp8266 by ESP8266 Community" (versão 3.x.x)
+  - Go to Tools → Board → Boards Manager
+  - Install "esp8266 by ESP8266 Community" (version 3.x.x)
 
-### 2. Bibliotecas Necessárias
-Instale via Arduino IDE (Tools → Manage Libraries):
+### 2. Required Libraries
+Install via Arduino IDE (Tools → Manage Libraries):
 
 ```
-✅ ESP8266WiFi (incluída no pacote ESP8266)
-✅ ESP8266WebServer (incluída no pacote ESP8266)
-✅ ESP8266mDNS (incluída no pacote ESP8266)
-✅ ArduinoOTA (incluída no pacote ESP8266)
+✅ ESP8266WiFi (included in ESP8266 package)
+✅ ESP8266WebServer (included in ESP8266 package)
+✅ ESP8266mDNS (included in ESP8266 package)
+✅ ArduinoOTA (included in ESP8266 package)
 ✅ PT2322 → https://github.com/Tiogaplanet/PT2322
-✅ IRremoteESP8266 → Instale via Library Manager
-✅ SinricPro → Instale via Library Manager
-✅ WiFiManager → Instale via Library Manager
+✅ IRremoteESP8266 → Install via Library Manager
+✅ SinricPro → Install via Library Manager
+✅ WiFiManager → Install via Library Manager
 ```
 
-### 3. Configuração das Credenciais
+### 3. Credentials Setup
 
-**IMPORTANTE**: Suas credenciais ficam em um arquivo separado para segurança!
+**IMPORTANT**: Your credentials are kept in a separate file for security!
 
-1. **Navegue até** `HomeTheater_v2/`
-2. **Copie** `config.example.h` para `config.h`:
+1. **Navigate to** `HomeTheater_v2/`
+2. **Copy** `config.example.h` to `config.h`:
    ```bash
    copy config.example.h config.h
    ```
-3. **Edite** `config.h` com suas credenciais:
+3. **Edit** `config.h` with your credentials:
 
 ```cpp
-// ⚠️ SUAS CREDENCIAIS DO SINRIC PRO
-#define SPEAKER_DEVICE_ID       "seu_speaker_id_aqui"
-#define SWITCH_DEVICE_ID        "seu_switch_id_aqui"
-#define APP_KEY                 "sua_app_key_aqui"
-#define APP_SECRET              "seu_app_secret_aqui"
+// ⚠️ YOUR SINRIC PRO CREDENTIALS
+#define SPEAKER_DEVICE_ID       "your_speaker_id_here"
+#define SWITCH_DEVICE_ID        "your_switch_id_here"
+#define APP_KEY                 "your_app_key_here"
+#define APP_SECRET              "your_app_secret_here"
 
-// WiFi AP (quando não conectar)
-#define WIFI_AP_PASSWORD        "SuaSenhaForte@2025"
+// WiFi AP (when connection fails)
+#define WIFI_AP_PASSWORD        "YourStrongPassword@2025"
 
-// OTA (atualização remota)
+// OTA (remote updates)
 #define OTA_PASSWORD            "HomeTheater@2025"
 ```
 
-4. **Obtenha credenciais do SinricPro**:
-   - Acesse [https://sinric.pro/](https://sinric.pro/)
-   - Crie uma conta gratuita
-   - Adicione dispositivos: 1x Speaker + 1x Switch
-   - Copie os IDs e chaves
+4. **Get SinricPro credentials**:
+   - Go to [https://sinric.pro/](https://sinric.pro/)
+   - Create a free account
+   - Add devices: 1x Speaker + 1x Switch
+   - Copy IDs and keys
 
-### 4. Upload do Firmware
+### 4. Firmware Upload
 
-**Primeira vez (via USB):**
-1. Conecte o NodeMCU via cabo USB
-2. Selecione: Tools → Board → NodeMCU 1.0 (ESP-12E Module)
-3. Selecione: Tools → Port → (sua porta COM)
+**First time (via USB):**
+1. Connect NodeMCU via USB cable
+2. Select: Tools → Board → NodeMCU 1.0 (ESP-12E Module)
+3. Select: Tools → Port → (your COM port)
 4. Configure: Tools → Flash Size → 4MB (FS:2MB OTA:~1019KB)
-5. Clique em Upload (→)
+5. Click Upload (→)
 
-**Atualizações seguintes (via OTA):**
-1. Abra Arduino IDE
+**Subsequent updates (via OTA):**
+1. Open Arduino IDE
 2. Tools → Port → `HomeTheater at 192.168.x.x`
-3. Clique em Upload (→)
-4. Digite a senha OTA quando solicitado
+3. Click Upload (→)
+4. Enter OTA password when prompted
 
 ---
 
-## 🌐 Acesso ao Sistema
+## 🌐 System Access
 
-### URLs de Acesso
+### Access URLs
 
-Após a primeira inicialização, acesse:
-
-```
-http://hometheater.local          ← Página principal
-http://home.local                 ← Alias alternativo
-http://192.168.x.x                ← IP direto (sempre funciona)
-```
-
-### Página de Status
+After first boot, access:
 
 ```
-http://hometheater.local/status-page    ← Interface visual
-http://hometheater.local/status         ← API JSON
+http://hometheater.local          ← Main page
+http://home.local                 ← Alternative alias
+http://192.168.x.x                ← Direct IP (always works)
 ```
 
-A página de status mostra:
-- 🖥️ Informações do sistema (versão, uptime, chip ID)
-- ⚡ CPU e Flash (frequência, tamanho, velocidade)
-- 💾 Memória RAM (livre, fragmentação)
-- 📡 WiFi (SSID, canal, IP, MAC, sinal)
-- 🔊 Estado do Home Theater (volumes, mute, etc)
+### Status Page
 
-### Se `.local` não funcionar:
+```
+http://hometheater.local/status-page    ← Visual interface
+http://hometheater.local/status         ← JSON API
+```
+
+Status page shows:
+- 🖥️ System information (version, uptime, chip ID)
+- ⚡ CPU and Flash (frequency, size, speed)
+- 💾 RAM Memory (free, fragmentation)
+- 📡 WiFi (SSID, channel, IP, MAC, signal)
+- 🔊 Home Theater state (volumes, mute, etc)
+
+### If `.local` doesn't work:
 
 **Windows:**
-- Instale [Bonjour Print Services](https://support.apple.com/kb/DL999)
-- Ou edite `C:\Windows\System32\drivers\etc\hosts`:
+- Install [Bonjour Print Services](https://support.apple.com/kb/DL999)
+- Or edit `C:\Windows\System32\drivers\etc\hosts`:
   ```
   192.168.x.x    hometheater.local
   192.168.x.x    home.local
   ```
 
 **Linux/Mac:**
-- Já suportam mDNS nativamente!
+- Native mDNS support!
 
 ---
 
-## 🎮 Uso do Sistema
+## 🎮 System Usage
 
-### Interface Web
+### Web Interface
 
-A interface possui 6 botões principais:
+The interface has 6 main buttons:
 
-| Botão | Função |
-|-------|--------|
-| 🔌 **Power** | Liga/desliga o sistema completo |
-| 📶 **Bluetooth** | Ativa/desativa módulo Bluetooth |
-| 🔇 **Mute** | Silencia/ativa áudio |
-| 🎲 **3D** | Ativa/desativa efeito 3D/DDD |
-| 🎵 **Audio In** | Alterna entrada de áudio |
-| 🔊 **5.1/2.1** | Alterna modo de canal |
+| Button | Function |
+|--------|----------|
+| 🔌 **Power** | Turn system on/off |
+| 📶 **Bluetooth** | Enable/disable Bluetooth module |
+| 🔇 **Mute** | Mute/unmute audio |
+| 🎲 **3D** | Enable/disable 3D/DDD effect |
+| 🎵 **Audio In** | Switch audio input |
+| 🔊 **5.1/2.1** | Toggle channel mode |
 
-**Controles de Volume:**
-- Volume Total (0-79)
+**Volume Controls:**
+- Total Volume (0-79)
 - Center (0-15)
 - Subwoofer (0-15)
 - Front L/R (0-15)
 - Surround L/R (0-15)
 
-### Comandos de Voz (Alexa)
+### Voice Commands (Alexa)
 
 ```
-"Alexa, liga o home theater"
-"Alexa, desliga o home theater"
-"Alexa, aumenta o volume do home theater"
-"Alexa, diminui o volume do home theater"
-"Alexa, coloca o volume do home theater em 50"
-"Alexa, silencia o home theater"
+"Alexa, turn on home theater"
+"Alexa, turn off home theater"
+"Alexa, increase home theater volume"
+"Alexa, decrease home theater volume"
+"Alexa, set home theater volume to 50"
+"Alexa, mute home theater"
 ```
 
-### Controle IR
+### IR Control
 
-Configure seu controle remoto IR e adicione os códigos no código:
+Configure your IR remote and add codes in the code:
 
 ```cpp
 void processIRCommand(decode_results *results) {
     switch(results->value) {
         case 0xYOUR_CODE_HERE:  // Power
-            // Seu código
+            // Your code
             break;
-        // ... mais comandos
+        // ... more commands
     }
 }
 ```
 
 ---
 
-## 🔒 Segurança
+## 🔒 Security
 
-### ⚠️ IMPORTANTE: Proteja Suas Credenciais!
+### ⚠️ IMPORTANT: Protect Your Credentials!
 
-O arquivo `config.h` contém informações sensíveis e **NUNCA** deve ser compartilhado ou commitado no Git.
+The `config.h` file contains sensitive information and should **NEVER** be shared or committed to Git.
 
-**O que está protegido:**
-- ✅ `config.h` está no `.gitignore`
-- ✅ Apenas `config.example.h` vai para o GitHub
-- ✅ Senhas e chaves ficam no seu dispositivo
+**What's protected:**
+- ✅ `config.h` is in `.gitignore`
+- ✅ Only `config.example.h` goes to GitHub
+- ✅ Passwords and keys stay on your device
 
-**Nunca compartilhe:**
-- IDs e chaves do SinricPro
-- Senhas de WiFi AP e OTA
-- Arquivo `config.h`
+**Never share:**
+- SinricPro IDs and keys
+- WiFi AP and OTA passwords
+- `config.h` file
 
-**Se acidentalmente expor credenciais:**
-1. Altere IMEDIATAMENTE todas as senhas
-2. Regenere chaves no SinricPro
-3. Remova o arquivo do histórico do Git
-
----
-
-## 🐛 Solução de Problemas
-
-### NodeMCU não conecta ao WiFi
-1. O WiFi Manager cria um AP: "Home Theater"
-2. Conecte-se a ele com senha: `@2025` (ou sua senha do config)
-3. Configure o WiFi pelo portal web
-
-### OTA não funciona
-- Primeira atualização **DEVE ser via USB**
-- Verifique se está na mesma rede WiFi
-- Confirme a senha OTA no `config.h`
-
-### `.local` não resolve
-- Instale Bonjour (Windows)
-- Use IP direto: `http://192.168.x.x`
-- Edite arquivo hosts
-
-### Sistema reinicia sozinho
-- Fonte insuficiente (use fonte de qualidade)
-- Verificar conexões (especialmente I²C)
-- Monitore RAM na página `/status`
-
-### Logs para Debug
-
-Conecte via Serial Monitor (115200 baud) para ver logs detalhados:
-```
-[0s] [INFO] 🌟 Iniciando sistema...
-[3s] [INFO] ✅ WiFi conectado!
-[4s] [INFO] ✅ OTA habilitado!
-[6s] [INFO] ✅ [SinricPro] Conectado
-```
+**If credentials are accidentally exposed:**
+1. Change ALL passwords IMMEDIATELY
+2. Regenerate keys in SinricPro
+3. Remove file from Git history
 
 ---
 
-## 📊 Especificações Técnicas
+## 🐛 Troubleshooting
+
+### NodeMCU doesn't connect to WiFi
+1. WiFi Manager creates an AP: "Home Theater"
+2. Connect to it with password: `@2025` (or your config password)
+3. Configure WiFi through web portal
+
+### OTA doesn't work
+- First update **MUST be via USB**
+- Verify you're on the same WiFi network
+- Confirm OTA password in `config.h`
+
+### `.local` doesn't resolve
+- Install Bonjour (Windows)
+- Use direct IP: `http://192.168.x.x`
+- Edit hosts file
+
+### System reboots randomly
+- Insufficient power supply (use quality PSU)
+- Check connections (especially I²C)
+- Monitor RAM on `/status` page
+
+### Debug Logs
+
+Connect via Serial Monitor (115200 baud) to see detailed logs:
+```
+[0s] [INFO] 🌟 Starting system...
+[3s] [INFO] ✅ WiFi connected!
+[4s] [INFO] ✅ OTA enabled!
+[6s] [INFO] ✅ [SinricPro] Connected
+```
+
+---
+
+## 📊 Technical Specifications
 
 ### Performance
-- **RAM Livre**: ~30-40KB (de 80KB total)
-- **Flash Usada**: ~550KB (de 4MB total)
+- **Free RAM**: ~30-40KB (of 80KB total)
+- **Flash Used**: ~550KB (of 4MB total)
 - **CPU**: 160 MHz
-- **Latência Web**: < 100ms (rede local)
+- **Web Latency**: < 100ms (local network)
 
-### Limitações
-- Suporta apenas WiFi 2.4GHz
-- Até 4 clientes HTTP simultâneos
-- SinricPro: limite de ~60 comandos/minuto (free tier)
+### Limitations
+- Supports only 2.4GHz WiFi
+- Up to 4 simultaneous HTTP clients
+- SinricPro: limit of ~60 commands/minute (free tier)
 
 ---
 
-## 🛠️ Desenvolvimento
+## 🛠️ Development
 
-### Estrutura do Projeto
+### Project Structure
 
 ```
 HomeTheater_v2/
-├── HomeTheater_v2.ino     ← Código principal
-├── config.h               ← Suas credenciais (NÃO commitar!)
-├── config.example.h       ← Template de configuração
-├── webpages.h             ← HTML/CSS em PROGMEM
-└── .gitignore             ← Proteção de arquivos sensíveis
+├── HomeTheater_v2.ino     ← Main code
+├── config.h               ← Your credentials (DON'T commit!)
+├── config.example.h       ← Configuration template
+├── webpages.h             ← HTML/CSS in PROGMEM
+└── .gitignore             ← Sensitive file protection
 
-exampleofthepage.html      ← Preview da interface web
-status-page.html           ← Preview da página de status
+exampleofthepage.html      ← Web interface preview
+status-page.html           ← Status page preview
+test-tone.html             ← Channel test page preview
 ```
 
-### Compilação
+### Compilation
 
-Configurações recomendadas no Arduino IDE:
+Recommended settings in Arduino IDE:
 
 ```
 Board:              NodeMCU 1.0 (ESP-12E Module)
 Flash Size:         4MB (FS:2MB OTA:~1019KB)
 CPU Frequency:      160 MHz
 Upload Speed:       115200
-Erase Flash:        Only Sketch (primeira vez: All Flash Contents)
+Erase Flash:        Only Sketch (first time: All Flash Contents)
 ```
-
----
-
-## 🤝 Contribuindo
-
-Contribuições são bem-vindas! Para contribuir:
-
-1. Fork o projeto
-2. Crie uma branch: `git checkout -b feature/MinhaFeature`
-3. Commit: `git commit -m 'Adiciona MinhaFeature'`
-4. Push: `git push origin feature/MinhaFeature`
-5. Abra um Pull Request
-
-**Ao contribuir, certifique-se de:**
-- Não incluir arquivos `config.h`
-- Testar no hardware real
-- Documentar mudanças significativas
-- Seguir o estilo de código existente
-
----
 
 ## 📝 Changelog
 
-### v2.5 (13/12/2025)
-- ✨ Interface web responsiva (mobile + desktop)
-- ✨ OTA Updates pela rede
-- ✨ Página de status completa com informações do sistema
-- ✨ Configurações em arquivo separado (`config.h`)
-- ✨ HTML movido para PROGMEM (economia de ~3.5KB RAM)
-- ✨ Delays não-bloqueantes
-- ✨ mDNS com múltiplos aliases
-- 🐛 Correções de estabilidade
-- 🔒 Melhorias de segurança
+### v2.5 (12/13/2025)
+- ✨ Responsive web interface (mobile + desktop)
+- ✨ OTA Updates over network
+- ✨ Complete status page with system information
+- ✨ Separate configuration file (`config.h`)
+- ✨ HTML moved to PROGMEM (~3.5KB RAM savings)
+- ✨ Non-blocking delays
+- ✨ mDNS with multiple aliases
+- 🐛 Stability fixes
+- 🔒 Security improvements
 
 ### v1.0 (Original)
-- Controle básico via web
-- Integração SinricPro
-- Controle IR
-- PT2322 para áudio 5.1
+- Basic web control
+- SinricPro integration
+- IR control
+- PT2322 for 5.1 audio
 
 ---
 
-## 📄 Licença
+## 📄 License
 
-Este projeto está licenciado sob a [MIT License](LICENSE).
+This project is licensed under the [MIT License](LICENSE).
 
-Você é livre para usar, modificar e distribuir este projeto, desde que mantenha os créditos originais.
+You are free to use, modify, and distribute this project, as long as you maintain the original credits.
 
 ---
 
-## 👤 Autor
+## 👤 Author
 
 **OnlyCampe**
 - GitHub: [@onlycampe](https://github.com/onlycampe)
 
 ---
 
-## 🙏 Agradecimentos
+## 🙏 Acknowledgments
 
-- Comunidade ESP8266
-- Biblioteca PT2322
+- ESP8266 Community
+- PT2322 Library
 - IRremoteESP8266
 - SinricPro
 - WiFiManager
 
 ---
 
-## 📞 Suporte
-
-Encontrou um bug ou tem uma sugestão?
-- Abra uma [Issue](../../issues)
-- Envie um [Pull Request](../../pulls)
+**⭐ If this project was useful, leave a star on GitHub!**
 
 ---
 
-**⭐ Se este projeto foi útil, deixe uma estrela no GitHub!**
-
----
-
-**Desenvolvido com ❤️ para entusiastas de Home Theater e IoT**
+**Developed with ❤️ for Home Theater and IoT enthusiasts**

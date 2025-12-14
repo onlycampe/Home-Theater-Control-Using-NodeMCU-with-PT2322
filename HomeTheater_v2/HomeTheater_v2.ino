@@ -1,20 +1,20 @@
 // =============================================================================
 // HOME THEATER CONTROL - ESP8266 NodeMCU + PT2322
 // =============================================================================
-// Versão 2.5 - Funcionalidades Avançadas
-// Autor: OnlyCampe
-// Data: 13/12/2025
+// Version 2.5 - Advanced Features
+// Author: OnlyCampe
+// Date: 12/13/2025
 //
-// MELHORIAS DESTA VERSÃO:
-// ✅ Delays não-bloqueantes (sistema sempre responsivo)
-// ✅ HTML movido para PROGMEM (economiza ~3.5KB de RAM)
-// ✅ Credenciais em arquivo separado (segurança)
-// ✅ Código limpo e otimizado
-// 🌟 OTA Updates (atualizar firmware pela WiFi sem cabo USB!)
-// 🌟 Página de status/diagnóstico completa
-// 🌟 Sistema de logging melhorado
-// 🌟 Interface responsiva (mobile + desktop)
-// 💡 Valores padrão (mudanças temporárias, reset ao reiniciar)
+// IMPROVEMENTS IN THIS VERSION:
+// ✅ Non-blocking delays (always responsive system)
+// ✅ HTML moved to PROGMEM (saves ~3.5KB of RAM)
+// ✅ Credentials in separate file (security)
+// ✅ Clean and optimized code
+// 🌟 OTA Updates (update firmware over WiFi without USB cable!)
+// 🌟 Complete status/diagnostic page
+// 🌟 Improved logging system
+// 🌟 Responsive interface (mobile + desktop)
+// 💡 Default values (temporary changes, reset on reboot)
 // =============================================================================
 
 #include <ESP8266WiFi.h>
@@ -30,9 +30,9 @@
 #include <WiFiManager.h>
 #include <ArduinoOTA.h>      // 🌟 OTA Updates
 
-// Incluir arquivos de configuração
-#include "config.h"          // ⚠️ Suas credenciais (renomeie config.example.h)
-#include "webpages.h"        // HTML armazenado na Flash (PROGMEM)
+// Include configuration files
+#include "config.h"          // ⚠️ Your credentials (rename config.example.h)
+#include "webpages.h"        // HTML stored in Flash (PROGMEM)
 
 // =============================================================================
 // OBJETOS GLOBAIS
@@ -45,7 +45,7 @@ ESP8266WebServer server(80);
 PT2322 pt;
 
 // =============================================================================
-// VARIÁVEIS DE ESTADO
+// STATE VARIABLES
 // =============================================================================
 bool isSystemOn = false;
 bool isBluetoothOn = false;
@@ -57,7 +57,7 @@ bool loggingEnabled = ENABLE_SERIAL_LOGGING;
 bool testToneActive = false;
 String activeTestChannel = "";
 
-// ✅ NOVO: Variáveis para controle de power não-bloqueante
+// ✅ NEW: Variables for non-blocking power control
 enum PowerSequenceState {
     POWER_IDLE,
     POWER_ON_STEP1,
@@ -68,9 +68,9 @@ unsigned long powerStateChangeTime = 0;
 bool targetPowerState = false;
 
 // =============================================================================
-// VARIÁVEIS DE VOLUME E ÁUDIO (VALORES PADRÃO)
+// VOLUME AND AUDIO VARIABLES (DEFAULT VALUES)
 // =============================================================================
-// 💡 Estes valores são restaurados a cada inicialização
+// 💡 These values are restored on each reboot
 int currentTotalVol = 53;
 int currentCenterVol = 10;
 int currentSubVol = 12;
@@ -82,14 +82,14 @@ const unsigned long volumeUpdateInterval = 1000;
 int lastVolumeSent = -1;
 
 // =============================================================================
-// 🌟 BUFFER POOL PARA OTIMIZAÇÃO DE MEMÓRIA
+// 🌟 BUFFER POOL FOR MEMORY OPTIMIZATION
 // =============================================================================
 static char smallBuffer[128];
 static char mediumBuffer[256];
 static char largeBuffer[512];
 
 // =============================================================================
-// DECLARAÇÕES DE FUNÇÕES (protótipos)
+// FUNCTION DECLARATIONS (prototypes)
 // =============================================================================
 bool onPowerState(const String &deviceId, bool &state);
 bool onSetVolume(const String &deviceId, int volume);
@@ -100,9 +100,9 @@ void logMessage(const char* level, const String& message);
 inline String maskIP(const IPAddress& ip);
 
 // =============================================================================
-// FUNÇÕES AUXILIARES OTIMIZADAS
+// OPTIMIZED HELPER FUNCTIONS
 // =============================================================================
-// Máscara de IP para logs (evita exposição completa)
+// IP mask for logs (avoids full exposure)
 inline String maskIP(const IPAddress& ip) {
     snprintf_P(smallBuffer, sizeof(smallBuffer), 
                PSTR("%d.%d.xxx.xxx"), ip[0], ip[1]);
@@ -110,7 +110,7 @@ inline String maskIP(const IPAddress& ip) {
 }
 
 // =============================================================================
-// SISTEMA DE LOGGING OTIMIZADO
+// OPTIMIZED LOGGING SYSTEM
 // =============================================================================
 void logMessage(const char* level, const String& message) {
     if (!loggingEnabled) return;
@@ -123,7 +123,7 @@ void logMessage(const char* level, const String& message) {
 }
 
 // =============================================================================
-// FUNÇÕES DE CONTROLE DE PINOS
+// PIN CONTROL FUNCTIONS
 // =============================================================================
 void togglePin(int pin, bool state, const String &message) {
     pinMode(pin, OUTPUT);
@@ -134,7 +134,7 @@ void togglePin(int pin, bool state, const String &message) {
 }
 
 // =============================================================================
-// FUNÇÕES DE ATUALIZAÇÃO DE ESTADO
+// STATE UPDATE FUNCTIONS
 // =============================================================================
 void updatePowerState(bool state) {
     speaker.sendPowerStateEvent(state);
@@ -147,27 +147,27 @@ void updateVolume(int volume) {
 }
 
 // =============================================================================
-// ✅ NOVO: CONTROLE DE POWER NÃO-BLOQUEANTE
+// ✅ NEW: NON-BLOCKING POWER CONTROL
 // =============================================================================
-// Esta função inicia a sequência de ligar/desligar sem usar delay()
-// O processamento acontece no loop através de handlePowerSequence()
+// This function starts the on/off sequence without using delay()
+// Processing happens in loop through handlePowerSequence()
 bool setPowerState(bool &state) {
     targetPowerState = state;
     powerStateChangeTime = millis();
     
     if (state) {
-        // Inicia sequência de LIGAR
+        // Start POWER ON sequence
         togglePin(PSON_PIN, true, loggingEnabled ? "PSON turned on" : "");
         powerSequence = POWER_ON_STEP1;
     } else {
-        // Inicia sequência de DESLIGAR
+        // Start POWER OFF sequence
         togglePin(RELAY_PIN, false, loggingEnabled ? "Relay turned off" : "");
         powerSequence = POWER_OFF_STEP1;
     }
     return true;
 }
 
-// ✅ NOVO: Processa a sequência de power de forma não-bloqueante
+// ✅ NEW: Process power sequence in non-blocking way
 void handlePowerSequence() {
     if (powerSequence == POWER_IDLE) return;
     
@@ -250,7 +250,7 @@ bool onDdd(const String &deviceId, bool &state) {
 }
 
 // =============================================================================
-// 🌟 HANDLER DA PÁGINA DE STATUS HTML (OTIMIZADO)
+// 🌟 HTML STATUS PAGE HANDLER (OPTIMIZED)
 // =============================================================================
 void handleStatusPage() {
     logMessage("WEB", "Status page: " + maskIP(server.client().remoteIP()));
@@ -259,9 +259,9 @@ void handleStatusPage() {
     server.send(200, "text/html", "");
     server.sendContent_P(STATUS_PAGE_HTML);
     
-    // Card 1: Sistema (usando buffer reutilizável)
-    server.sendContent_P(PSTR("<div class='card'><h2><i class='fa-solid fa-microchip'></i> Sistema</h2><div class='info-grid'>"));
-    server.sendContent_P(PSTR("<span class='label'>Versão:</span><span class='value'>2.5</span>"));
+    // Card 1: System (using reusable buffer)
+    server.sendContent_P(PSTR("<div class='card'><h2><i class='fa-solid fa-microchip'></i> System</h2><div class='info-grid'>"));
+    server.sendContent_P(PSTR("<span class='label'>Version:</span><span class='value'>2.5</span>"));
     
     snprintf_P(largeBuffer, sizeof(largeBuffer),
                PSTR("<span class='label'>Uptime:</span><span class='value'>%lus (%lu min)</span>"),
@@ -331,7 +331,7 @@ void handleStatusPage() {
     yield();
     yield();
     
-    // Card 3: Memória
+    // Card 3: Memory
     int freeHeap = ESP.getFreeHeap();
     int heapPercent = (freeHeap * 100) / 80192;
     const char* heapClass = heapPercent > 30 ? "status-ok" : "status-warn";
@@ -339,9 +339,9 @@ void handleStatusPage() {
     server.sendContent_P(PSTR("<div class='card'><h2><i class='fa-solid fa-memory'></i> Memória RAM</h2><div class='info-grid'>"));
     
     snprintf_P(largeBuffer, sizeof(largeBuffer),
-               PSTR("<span class='label'>RAM Livre:</span><span class='value %s'>%d bytes (%d%%)</span>"
+               PSTR("<span class='label'>Free RAM:</span><span class='value %s'>%d bytes (%d%%)</span>"
                     "<span class='label'>Max Free Block:</span><span class='value'>%d bytes</span>"
-                    "<span class='label'>Fragmentação:</span><span class='value'>%d%%</span>"),
+                    "<span class='label'>Fragmentation:</span><span class='value'>%d%%</span>"),
                heapClass, freeHeap, heapPercent,
                ESP.getMaxFreeBlockSize(),
                ESP.getHeapFragmentation());
@@ -361,7 +361,7 @@ void handleStatusPage() {
     server.sendContent_P(PSTR("</span>"));
     
     snprintf_P(mediumBuffer, sizeof(mediumBuffer),
-               PSTR("<span class='label'>Canal:</span><span class='value'>%d</span>"),
+               PSTR("<span class='label'>Channel:</span><span class='value'>%d</span>"),
                WiFi.channel());
     server.sendContent(mediumBuffer);
     
@@ -379,11 +379,11 @@ void handleStatusPage() {
     
     yield();
     
-    // Card 5: Estado do Home Theater
+    // Card 5: Home Theater Status
     server.sendContent_P(PSTR("<div class='card'><h2><i class='fa-solid fa-volume-high'></i> Home Theater</h2><div class='info-grid'>"));
     
     snprintf_P(largeBuffer, sizeof(largeBuffer),
-               PSTR("<span class='label'>Sistema:</span><span class='value%s'>%s</span>"
+               PSTR("<span class='label'>System:</span><span class='value%s'>%s</span>"
                     "<span class='label'>Bluetooth:</span><span class='value%s'>%s</span>"
                     "<span class='label'>Mute:</span><span class='value%s'>%s</span>"
                     "<span class='label'>DDD:</span><span class='value%s'>%s</span>"),
@@ -394,7 +394,7 @@ void handleStatusPage() {
     server.sendContent(largeBuffer);
     
     snprintf_P(largeBuffer, sizeof(largeBuffer),
-               PSTR("<span class='label'>Volume Total:</span><span class='value'>%d/79 (%d%%)</span>"
+               PSTR("<span class='label'>Total Volume:</span><span class='value'>%d/79 (%d%%)</span>"
                     "<span class='label'>Center:</span><span class='value'>%d/15</span>"
                     "<span class='label'>Subwoofer:</span><span class='value'>%d/15</span>"
                     "<span class='label'>Front L/R:</span><span class='value'>%d/15</span>"
@@ -463,7 +463,7 @@ void handleStatus() {
 }
 
 // =============================================================================
-// ✅ HANDLER DA PÁGINA WEB (OTIMIZADO)
+// ✅ WEB PAGE HANDLER (OPTIMIZED)
 // =============================================================================
 void handleRoot() {
     logMessage("WEB", "Página: " + maskIP(server.client().remoteIP()));
@@ -472,7 +472,7 @@ void handleRoot() {
     server.send(200, "text/html", "");
     server.sendContent_P(HTML_HEADER);
     
-    // Gera botões usando buffer reutilizável
+    // Generate buttons using reusable buffer
     struct Button { const char* id; const char* icon; const char* iconClass; bool state; };
     const Button buttons[] = {
         {"system", "power-off", "fa-solid", isSystemOn},
@@ -494,10 +494,10 @@ void handleRoot() {
         server.sendContent(mediumBuffer);
     }
     
-    // Gera sliders usando buffer reutilizável
+    // Generate sliders using reusable buffer
     struct Slider { const char* id; const char* label; int min; int max; int value; };
     const Slider sliders[] = {
-        {"total", "Volume Total", 0, 79, currentTotalVol},
+        {"total", "Total Volume", 0, 79, currentTotalVol},
         {"center", "Center", 0, 15, currentCenterVol},
         {"sub", "Subwoofer", 0, 15, currentSubVol},
         {"front", "Front L/R", 0, 15, currentFrontVol},
@@ -573,7 +573,7 @@ void handleSetVolume() {
         pt.setVol(currentTotalVol);
         updateVolume(currentTotalVol);
         if (loggingEnabled) {
-            logMessage("WEB", "Volume " + String(currentTotalVol) + " de " + maskIP(server.client().remoteIP()));
+            logMessage("WEB", "Volume " + String(currentTotalVol) + " from " + maskIP(server.client().remoteIP()));
         }
     }
     if (server.hasArg("center")) {
@@ -601,7 +601,7 @@ void handleSetVolume() {
 }
 
 // =============================================================================
-// 🎵 TEST TONE HANDLERS (CALIBRAÇÃO)
+// 🎵 TEST CHANNEL HANDLERS (CALIBRATION)
 // =============================================================================
 void handleTestTone() {
     String channel = server.arg("channel");
@@ -609,7 +609,7 @@ void handleTestTone() {
     testToneActive = true;
     activeTestChannel = channel;
     
-    // Silencia todos os canais primeiro (15 = mudo)
+    // Silence all channels first (15 = mute)
     pt.setCenter_att(15);
     pt.setSub_att(15);
     pt.setFront_lk_att(15);
@@ -617,7 +617,7 @@ void handleTestTone() {
     pt.setRear_lk_att(15);
     pt.setRear_rk_att(15);
     
-    // Ativa apenas o canal de teste (0 = volume normal)
+    // Activate only the test channel (0 = normal volume)
     if (channel == "front_left") {
         pt.setFront_lk_att(15 - currentFrontVol);
     } else if (channel == "front_right") {
@@ -631,7 +631,7 @@ void handleTestTone() {
     } else if (channel == "rear_right") {
         pt.setRear_rk_att(15 - currentRearVol);
     } else if (channel == "all") {
-        // Restaura todos os canais
+        // Restore all channels
         pt.setCenter_att(15 - currentCenterVol);
         pt.setSub_att(15 - currentSubVol);
         pt.setFront_lk_att(15 - currentFrontVol);
@@ -640,7 +640,7 @@ void handleTestTone() {
         pt.setRear_rk_att(15 - currentRearVol);
     }
     
-    logMessage("TEST", "Testando canal: " + channel);
+    logMessage("TEST", "Testing channel: " + channel);
     server.send(200, "text/plain", "Test started");
 }
 
@@ -648,7 +648,7 @@ void handleStopTest() {
     testToneActive = false;
     activeTestChannel = "";
     
-    // Restaura volumes originais
+    // Restore original volumes
     pt.setVol(currentTotalVol);
     pt.setCenter_att(15 - currentCenterVol);
     pt.setSub_att(15 - currentSubVol);
@@ -699,7 +699,7 @@ void setupOTA() {
     
     ArduinoOTA.onStart([]() {
         String type = (ArduinoOTA.getCommand() == U_FLASH) ? "sketch" : "filesystem";
-        logMessage("OTA", "🔄 Iniciando atualização OTA: " + type);
+        logMessage("OTA", "🔄 Starting OTA update: " + type);
     });
     
     ArduinoOTA.onEnd([]() {
@@ -726,21 +726,21 @@ void setupOTA() {
     });
     
     ArduinoOTA.begin();
-    logMessage("INFO", "✅ OTA habilitado! Senha: HomeTheater@2025");
+    logMessage("INFO", "✅ OTA enabled! Password: HomeTheater@2025");
 }
 
 // =============================================================================
-// FUNÇÕES DE SETUP
+// SETUP FUNCTIONS
 // =============================================================================
 void setupMDNS() {
-    // Nome principal
+    // Main name
     if (!MDNS.begin(MDNS_NAME)) {
-        logMessage("WARNING", "⚠️ mDNS falhou (normal no Windows sem Bonjour)");
-        logMessage("INFO", "💡 Instale Bonjour ou use IP: http://" + WiFi.localIP().toString());
+        logMessage("WARNING", "⚠️ mDNS failed (normal on Windows without Bonjour)");
+        logMessage("INFO", "💡 Install Bonjour or use IP: http://" + WiFi.localIP().toString());
     } else {
-        // Adiciona serviço HTTP para descoberta
+        // Add HTTP service for discovery
         MDNS.addService("http", "tcp", 80);
-        logMessage("INFO", "✅ mDNS ativo:");
+        logMessage("INFO", "✅ mDNS active:");
         logMessage("INFO", "   • http://" + String(MDNS_NAME) + ".local");
         logMessage("INFO", "   • http://" + String(MDNS_ALIAS) + ".local (alias)");
     }
@@ -754,29 +754,29 @@ void setupServer() {
     server.on("/setFunc", HTTP_POST, handleSetFunc);
     server.on("/status", handleStatus);
     server.on("/status-page", handleStatusPage);
-    server.on("/test-tone.html", handleTestPage);     // 🎵 Página de teste
-    server.on("/testTone", HTTP_POST, handleTestTone); // 🎵 API de teste
-    server.on("/stopTest", HTTP_POST, handleStopTest); // 🎵 Parar teste
+    server.on("/test-tone.html", handleTestPage);     // 🎵 Test page
+    server.on("/testTone", HTTP_POST, handleTestTone); // 🎵 Test API
+    server.on("/stopTest", HTTP_POST, handleStopTest); // 🎵 Stop test
     server.begin();
     logMessage("INFO", "✅ HTTP server iniciado na porta 80");
 }
 
 void setupPins() {
-    // ✅ Configuração de pinos de saída (removido código duplicado)
+    // ✅ Output pin configuration (removed duplicate code)
     pinMode(PSON_PIN, OUTPUT);
     pinMode(BLUETOOTH_PIN, OUTPUT);
     pinMode(AUDIO_IN_PIN, OUTPUT);
     pinMode(AUDIO_51_PIN, OUTPUT);
     pinMode(RELAY_PIN, OUTPUT);
     
-    // Inicialização dos pinos
+    // Pin initialization
     digitalWrite(PSON_PIN, LOW);
     digitalWrite(BLUETOOTH_PIN, LOW);
     digitalWrite(AUDIO_IN_PIN, LOW);
     digitalWrite(AUDIO_51_PIN, LOW);
     digitalWrite(RELAY_PIN, LOW);
     
-    // Ativação do receptor IR
+    // IR receiver activation
     irrecv.enableIRIn();
     
     logMessage("INFO", "✅ Pinos configurados e IR ativado");
@@ -811,20 +811,20 @@ void setup() {
         Serial.println(F("==========================================="));
     }
     
-    logMessage("INFO", F("🌟 Sistema iniciando..."));
+    logMessage("INFO", F("🌟 Starting system..."));
     
     // WiFi Manager Setup
     WiFiManager wifiManager;
     wifiManager.setConfigPortalTimeout(180);
     
-    logMessage("INFO", F("Conectando WiFi..."));
+    logMessage("INFO", F("Connecting to WiFi..."));
     if (!wifiManager.autoConnect(WIFI_AP_NAME, WIFI_AP_PASSWORD)) {
-        logMessage("ERROR", F("❌ Falha WiFi. Reiniciando..."));
+        logMessage("ERROR", F("❌ WiFi failed. Rebooting..."));
         delay(3000);
         ESP.restart();
     }
     
-    logMessage("INFO", F("✅ WiFi conectado!"));
+    logMessage("INFO", F("✅ WiFi connected!"));
     logMessage("INFO", "IP: " + WiFi.localIP().toString());
     logMessage("INFO", "MAC: " + WiFi.macAddress());
     snprintf_P(smallBuffer, sizeof(smallBuffer), PSTR("Signal: %d dBm"), WiFi.RSSI());
@@ -842,16 +842,16 @@ void setup() {
         return onSetVolume(deviceId, volume);
     });
     
-    SinricPro.onConnected([]() { logMessage("INFO", F("✅ [SinricPro] Conectado")); });
-    SinricPro.onDisconnected([]() { logMessage("WARNING", F("⚠️ [SinricPro] Desconectado")); });
+    SinricPro.onConnected([]() { logMessage("INFO", F("✅ [SinricPro] Connected")); });
+    SinricPro.onDisconnected([]() { logMessage("WARNING", F("⚠️ [SinricPro] Disconnected")); });
     SinricPro.begin(APP_KEY, APP_SECRET);
     
     applySettings();
     
     if (loggingEnabled) {
         Serial.println(F("\n==========================================="));
-        Serial.println(F("  ✅ SISTEMA PRONTO!"));
-        Serial.println(F("\n  📱 ACESSE:"));
+        Serial.println(F("  ✅ SYSTEM READY!"));
+        Serial.println(F("\n  📱 ACCESS:"));
         Serial.print(F("     http://"));
         Serial.print(MDNS_NAME);
         Serial.println(F(".local"));
@@ -866,10 +866,10 @@ void setup() {
 }
 
 // =============================================================================
-// ✅ LOOP PRINCIPAL (NÃO-BLOQUEANTE + OTA)
+// ✅ MAIN LOOP (NON-BLOCKING + OTA)
 // =============================================================================
 void loop() {
-    // Watchdog - alimenta o cão de guarda para evitar reset
+    // Watchdog - feed the watchdog to avoid reset
     yield();
     
     ArduinoOTA.handle();    // 🌟 Processa OTA
@@ -884,7 +884,7 @@ void loop() {
     SinricPro.handle();
     yield();
     
-    // ✅ Processa sequência de power de forma não-bloqueante
+    // ✅ Process power sequence in non-blocking way
     handlePowerSequence();
     
     // Processa comandos de IR
@@ -896,7 +896,7 @@ void loop() {
         irrecv.resume();
     }
     
-    // Envia eventos de volume em intervalos definidos
+    // Send volume events at defined intervals
     unsigned long currentTime = millis();
     if (currentTime - lastVolumeUpdateTime >= volumeUpdateInterval) {
         if (lastVolumeSent != -1) {

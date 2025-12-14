@@ -16,7 +16,8 @@
 #define AUDIO_IN_PIN D5      // Audio In control pin (selects audio inputs on a HD Audio Rush decoder, simulating a physical button press)
 #define AUDIO_51_PIN D7  // 5.1/2.1 control pin (simulating a physical button press)
 #define RELAY_PIN D3         // Control pin for relays using BC547
-// Device settings
+// Device settings - ⚠️ CREDENTIALS REMOVED FOR SECURITY
+// Get your credentials at: https://sinric.pro/
 #define SPEAKER_DEVICE_ID       "your_speaker_device_id_here"
 #define SWITCH_DEVICE_ID        "your_switch_device_id_here"
 #define APP_KEY                 "your_app_key_here"
